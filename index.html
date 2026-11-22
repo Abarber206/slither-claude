@@ -454,7 +454,7 @@ function rebuildBody(s){
     need-=d; px=qx; py=qy;
   }
   s.n=k;
-  if(!s.remote&&i>120){tx.splice(0,i-40);ty.splice(0,i-40);}
+  if(i>120){tx.splice(0,i-40);ty.splice(0,i-40);}
 }
 let targetBots=NBOTS;
 function newBot(initial){
@@ -878,10 +878,15 @@ function onRemote(peer){
     if(!s){
       const ki=num(pr.k,0,SKINS.length-1);
       s=baseSnake({name:String(pr.n||'Player').replace(/[\u0000-\u001f\u007f-\u009f]/g,'').slice(0,14)||'Player',skin:SKINS[ki===null?0:Math.floor(ki)],mass:m});
-      s.remote=true; s.peer=peer.peer; s.netId=id; s.x=x; s.y=y; s.ang=a;
-      remotes.set(peer.peer,s); snakes.push(s);
+      s.remote=true; s.peer=peer.peer; s.netId=id; s.x=x; s.y=y; s.ang=a; s.buf=[]; s.off=null;
+      // seed the body once from their outline; after that the body follows its own trail like any local snake
+      const tx=[],ty=[]; for(let i=pts.length-2;i>=0;i-=2){tx.push(pts[i]);ty.push(pts[i+1]);} s.tx=tx; s.ty=ty;
+      remotes.set(peer.peer,s); snakes.push(s); sizeUp(s); rebuildBody(s);
     }
-    s.net={x,y,a,b:pr.b?1:0,g:pr.g?1:0,p:pts,t:performance.now()}; s.mass=m; sizeUp(s);
+    const now=performance.now(), ts0=num(pr.t,0,1e13), ts=ts0===null?now:ts0, o=ts-now;
+    s.off=s.off===null?o:Math.max(o,s.off-3);
+    const B=s.buf; if(!B.length||ts>B[B.length-1].t){B.push({t:ts,x,y,a,b:pr.b?1:0,g:pr.g?1:0}); if(B.length>40)B.shift();}
+    s.lastRecv=now; s.mass=m; s.net=true;
   } else if(pr.st==='dead'){
     if(s&&!s.dead&&s.netId===pr.id){
       const mass=s.mass; kill(s,-1);
@@ -891,14 +896,26 @@ function onRemote(peer){
     remotes.delete(peer.peer);
   } else { if(s&&!s.dead){s.dead=true;s.gone=true;} remotes.delete(peer.peer); }
 }
+const NET_DELAY=110;
+function cr(p0,p1,p2,p3,t){const t2=t*t,t3=t2*t;return .5*((2*p1)+(-p0+p2)*t+(2*p0-5*p1+4*p2-p3)*t2+(-p0+3*p1-3*p2+p3)*t3);}
 function updateRemote(s,dt){
-  const n=s.net; if(!n) return;
-  const now=performance.now(); if(now-n.t>4000){s.dead=true;s.gone=true;remotes.delete(s.peer);return;}
-  const age=Math.min(.25,(now-n.t)/1000), sp=(n.b?BOOSTSPD:SPEED)*spm(s);
-  const px=n.x+Math.cos(n.a)*sp*age, py=n.y+Math.sin(n.a)*sp*age, k=Math.min(1,dt*14);
-  const ox=s.x,oy=s.y; s.x+=(px-s.x)*k; s.y+=(py-s.y)*k; const dd=Math.hypot(s.x-ox,s.y-oy); s.trav=(s.trav||0)+dd; s.rs=(s.rs===undefined?s.r:s.rs)+(s.r-(s.rs===undefined?s.r:s.rs))*Math.min(1,dt*2.5); s.wph=(s.wph||0)+dd*TAU/(s.rs*9.5); s.ampK=(s.ampK===undefined?.34:s.ampK)+(((n.b?.16:.34))-(s.ampK===undefined?.34:s.ampK))*Math.min(1,dt*3); s.ang=n.a; s.tAng=n.a; s.look=n.a; s.boosting=!!n.b; s.pu.ghost=n.g?1:0;
-  const p=n.p, tx=[], ty=[]; for(let i=p.length-2;i>=2;i-=2){tx.push(p[i]);ty.push(p[i+1]);}
-  tx.push(s.x); ty.push(s.y); s.tx=tx; s.ty=ty;
+  const B=s.buf; if(!B||!B.length) return;
+  const now=performance.now(); if(now-s.lastRecv>4000){s.dead=true;s.gone=true;remotes.delete(s.peer);return;}
+  const rt=now+s.off-NET_DELAY; let x,y,a,bst=B[B.length-1];
+  let i=-1; for(let k=B.length-2;k>=0;k--){if(B[k].t<=rt){i=k;break;}}
+  if(i>=0&&i<B.length-1){
+    const p0=B[Math.max(0,i-1)],p1=B[i],p2=B[i+1],p3=B[Math.min(B.length-1,i+2)],f=clamp((rt-p1.t)/Math.max(1,p2.t-p1.t),0,1);
+    x=cr(p0.x,p1.x,p2.x,p3.x,f); y=cr(p0.y,p1.y,p2.y,p3.y,f); a=p1.a+angDiff(p2.a,p1.a)*f; bst=p2;
+  } else if(rt>=B[B.length-1].t){
+    const L=B[B.length-1], e=Math.min(.2,(rt-L.t)/1000), sp=(L.b?BOOSTSPD:SPEED)*spm(s);
+    x=L.x+Math.cos(L.a)*sp*e; y=L.y+Math.sin(L.a)*sp*e; a=L.a;
+  } else { x=B[0].x; y=B[0].y; a=B[0].a; }
+  const ox=s.x,oy=s.y, dd=Math.hypot(x-ox,y-oy);
+  if(dd>600){ s.tx.push(x); s.ty.push(y); } // teleport safety
+  s.x=x; s.y=y; s.ang=a; s.tAng=a; s.look=a; s.boosting=!!bst.b; s.pu.ghost=bst.g?1:0;
+  if(dd>.3){s.tx.push(x);s.ty.push(y);}
+  s.trav=(s.trav||0)+dd; s.rs=(s.rs===undefined?s.r:s.rs)+(s.r-(s.rs===undefined?s.r:s.rs))*Math.min(1,dt*2.5);
+  s.wph=(s.wph||0)+dd*TAU/(s.rs*9.5); s.ampK=(s.ampK===undefined?.34:s.ampK)+(((bst.b?.16:.34))-(s.ampK===undefined?.34:s.ampK))*Math.min(1,dt*3);
   sizeUp(s); rebuildBody(s);
 }
 let lastNet=0,lastNetKey='';
@@ -907,11 +924,11 @@ function netSend(force){
   const now=performance.now();
   let pr;
   if(state==='play'&&player&&!player.dead){
-    if(!force&&now-lastNet<70) return;
+    if(!force&&now-lastNet<55) return;
     const n=player.n,stride=Math.max(1,Math.ceil(n/50)),p=[];
     for(let i=0;i<n;i+=stride) p.push(Math.round(player.bx[i]),Math.round(player.by[i]));
     if((n-1)%stride) p.push(Math.round(player.bx[n-1]),Math.round(player.by[n-1]));
-    pr={st:'play',id:player.uid,n:player.name,k:skinIdx,x:Math.round(player.x),y:Math.round(player.y),a:Math.round(player.ang*1000)/1000,m:Math.round(player.mass),b:player.boosting?1:0,g:player.pu.ghost>0?1:0,p};
+    pr={st:'play',id:player.uid,t:Math.round(now),n:player.name,k:skinIdx,x:Math.round(player.x*10)/10,y:Math.round(player.y*10)/10,a:Math.round(player.ang*1000)/1000,m:Math.round(player.mass),b:player.boosting?1:0,g:player.pu.ghost>0?1:0,p};
     lastNetKey='play';
   } else if(state==='dying'||state==='over'){
     const key='dead'+stats.deadId; if(!force&&key===lastNetKey) return; lastNetKey=key;
@@ -1298,17 +1315,20 @@ function render(){
 }
 
 /* ---------- HUD ---------- */
-const scoreEl=$('score'),rankEl=$('rank'),lbl=$('lbl'),puEl=$('pu'),onlineEl=$('online');
+const lbTitle=document.querySelector('#lb h4'),scoreEl=$('score'),rankEl=$('rank'),lbl=$('lbl'),puEl=$('pu'),onlineEl=$('online');
 function updateHud(){
   const alive=snakes.filter(s=>!s.dead).sort((a,b)=>b.mass-a.mass);
   leader=alive[0]||null;
   targetBots=Math.max(18,NBOTS-humansPlaying()*4);
   if(state!=='play'||!player||player.dead) return;
-  const LBN=W<520?6:8, rank=alive.indexOf(player)+1; if(rank>0) stats.bestRank=Math.min(stats.bestRank,rank);
-  scoreEl.textContent=fmt(player.mass); rankEl.textContent=`Rank ${rank} of ${alive.length}`;
+  const LBN=W<520?6:8, humans=alive.filter(s=>s.player||s.remote), shared=!!chan&&humans.length>1;
+  const board=shared?humans:alive, rank=board.indexOf(player)+1; if(rank>0) stats.bestRank=Math.min(stats.bestRank,rank);
+  lbTitle.textContent=shared?'Players':'Leaderboard';
+  scoreEl.textContent=fmt(player.mass); rankEl.textContent=shared?`Rank ${rank} of ${humans.length} players`:`Rank ${rank} of ${alive.length}`;
   const h=humansPlaying(); onlineEl.textContent=chan?(h?`● ${h+1} humans${partyCode?' · party '+partyCode:''}`:`● online${partyCode?' · party '+partyCode:''} · waiting for players`):'';
-  let html=''; alive.slice(0,LBN).forEach((s,i)=>{html+=`<li class="${s===player?'me':''}${s.remote?' hum':''}"><span class="nm">${i+1}. ${esc(s.name)}</span><span>${fmt(s.mass)}</span></li>`;});
+  let html=''; board.slice(0,LBN).forEach((s,i)=>{html+=`<li class="${s===player?'me':''}${s.remote?' hum':''}"><span class="nm">${i+1}. ${esc(s.name)}</span><span>${fmt(s.mass)}</span></li>`;});
   if(rank>LBN) html+=`<li class="me sep"><span class="nm">${rank}. ${esc(player.name)}</span><span>${fmt(player.mass)}</span></li>`;
+  if(shared) html+=`<li class="sep" style="opacity:.6"><span class="nm">+ ${alive.length-humans.length} bots</span><span>yours only</span></li>`;
   lbl.innerHTML=html;
   let ph=''; for(const k in player.pu) if(player.pu[k]>0) ph+=`<div class="pill" style="color:${PU_COL[k]}">${PU_NAME[k]} ${Math.ceil(player.pu[k])}s</div>`;
   puEl.innerHTML=ph;
