@@ -608,6 +608,7 @@ function kill(s,k){
     if(world==='meadow'){burst(s.x,s.y,'#7fae4a',22,260,1.1);burst(s.x,s.y,'#c9df8a',10,180,.9);}
     for(let q=0;q<Math.min(12,s.n);q++){const i=Math.floor(q/12*s.n);if(world==='water'){ripple(s.bx[i],s.by[i],s.r*2.5,1.6);ripple(s.bx[i],s.by[i],s.r*1.8,6,hA);}else{trample(s.bx[i],s.by[i],s.r*3,0,0,1,s.r);}}}
   if(killer&&!killer.dead) killer.kills++;
+  if(!s.player&&!s.remote&&worldRole==='host') deadLog.push({id:s.uid,kb:killer?(killer.player?myPeer:(killer.remote&&!killer.netbot?killer.peer:'')):'',t:performance.now()});
   if(s.player){onPlayerDeath(killer,mass);return;}
   if(s.remote){s.gone=true;return;}
   s.respawnAt=clock+rnd(1,4);
@@ -631,10 +632,12 @@ function step(dt){
   for(const s of snakes){ if(s.dead||s.remote) continue; const k=collide(s); if(k!==-2) dying.push([s,k]); }
   for(const [s,k] of dying) kill(s,k);
   updatePellets(dt);
-  let bots=0; for(const s of snakes) if(!s.player&&!s.remote&&!s.gone) bots++;
-  for(let i=0;i<snakes.length;i++){const s=snakes[i];
-    if(s.dead&&!s.player&&!s.remote&&!s.gone&&clock>s.respawnAt){ if(bots>targetBots){s.gone=true;bots--;} else snakes[i]=newBot(false); }}
-  if(bots<targetBots&&Math.random()<.02) snakes.push(newBot(false));
+  if(worldRole!=='follower'){
+    let bots=0; for(const s of snakes) if(!s.player&&!s.remote&&!s.gone) bots++;
+    for(let i=0;i<snakes.length;i++){const s=snakes[i];
+      if(s.dead&&!s.player&&!s.remote&&!s.gone&&clock>s.respawnAt){ if(bots>targetBots){s.gone=true;bots--;} else snakes[i]=newBot(false); }}
+    if(bots<targetBots&&Math.random()<.02) snakes.push(newBot(false));
+  }
   if(snakes.some(s=>s.gone)){snakes=snakes.filter(s=>!s.gone);for(let i=0;i<snakes.length;i++)snakes[i].slot=i;buildBodyGrid();}
   while(pus.length<NPU) spawnPU();
   const damp=Math.exp(-dt*4); let w=0;
@@ -680,7 +683,7 @@ function onPlayerEat(p){
 function onPlayerKill(s,mass){
   stats.kills++;
   stats.streak=clock-stats.lastKill<8?stats.streak+1:1; stats.lastKill=clock;
-  feed(`You devoured <b>${esc(s.name)}</b>${s.remote?' <span style="color:#9DB17C">●</span>':''} <span style="opacity:.6">+${fmt(mass*.8)}</span>`);
+  feed(`You devoured <b>${esc(s.name)}</b>${s.remote&&!s.netbot?' <span style="color:#9DB17C">●</span>':''} <span style="opacity:.6">+${fmt(mass*.8)}</span>`);
   if(stats.streak>=2) feed(stats.streak===2?'Double devour!':stats.streak===3?'Triple devour!':'Unstoppable ✦','big');
   [523.25,659.25,783.99,1046.5].forEach((f,i)=>tone(f,.22,'triangle',.08,0,i*.06));
   shake=Math.min(10,4+mass/300); vibrate(35);
@@ -719,13 +722,14 @@ function PeerParty(code){
   const snap=()=>{const a=[{peer:st.me||'me',by:null,isMe:true,sameTab:true,kind:'viewer',guest:false,presence:st.mine,updatedAt:Date.now()}];
     for(const [p,o] of st.others) a.push({peer:p,by:null,isMe:false,sameTab:false,kind:'viewer',guest:false,presence:o.presence,updatedAt:o.t});return a;};
   const change=(joined,updated,left)=>{const ps=snap();for(const f of st.fns){try{f({peers:ps,joined,updated,left})}catch(e){}}};
-  const upsert=(id,pr)=>{if(!id||id===st.me)return;const had=st.others.has(id);let q={};try{q=JSON.parse(JSON.stringify(pr||{}))}catch(e){}
+  const upsert=(id,pr,full)=>{if(!id||id===st.me)return;const had=st.others.has(id);let q={};try{q=JSON.parse(JSON.stringify(pr||{}))}catch(e){}
+    if(!full&&had){const prev=st.others.get(id).presence;const m=Object.assign({},prev);for(const k in q){if(q[k]===null)delete m[k];else m[k]=q[k];}q=m;}
     st.others.set(id,{presence:Object.freeze(q),t:Date.now()});const x=snap().find(v=>v.peer===id);change(had?[]:[x],had?[x]:[],[]);};
   const remove=id=>{const o=st.others.get(id);if(!o)return;st.others.delete(id);change([],[],[{peer:id,presence:o.presence,isMe:false,sameTab:false,kind:'viewer'}]);};
   const sendAll=(m,except)=>{for(const [id,c] of st.conns){if(id!==except&&c.open){try{c.send(m)}catch(e){}}}};
   const api={name:code,
     presence(patch){for(const k in patch){if(patch[k]===null)delete st.mine[k];else st.mine[k]=patch[k];}
-      if(st.host) sendAll({t:'p',peer:st.me,pr:st.mine}); else if(st.hostConn&&st.hostConn.open){try{st.hostConn.send({t:'p',pr:st.mine})}catch(e){}}
+      if(st.host) sendAll({t:'p',peer:st.me,pr:patch}); else if(st.hostConn&&st.hostConn.open){try{st.hostConn.send({t:'p',pr:patch})}catch(e){}}
       return Promise.resolve();},
     onPeers(fn){st.fns.add(fn);setTimeout(()=>{const ps=snap();fn({peers:ps,joined:ps,updated:[],left:[]});},0);return ()=>st.fns.delete(fn);},
     peers:()=>snap(), connected:()=>!st.dead, isHost:()=>st.host,
@@ -747,7 +751,7 @@ function PeerParty(code){
         const list=[[st.me,st.mine]];for(const [id,o] of st.others)list.push([id,o.presence]);
         try{conn.send({t:'roster',list})}catch(e){}
       });
-      conn.on('data',m=>{conn.__last=Date.now();if(!m||typeof m!=='object')return;if(m.t==='p'&&st.conns.get(conn.peer)===conn){upsert(conn.peer,m.pr);sendAll({t:'p',peer:conn.peer,pr:m.pr},conn.peer);}});
+      conn.on('data',m=>{conn.__last=Date.now();if(!m||typeof m!=='object')return;if(m.t==='p'&&st.conns.get(conn.peer)===conn){upsert(conn.peer,m.pr,!!m.full);sendAll({t:'p',peer:conn.peer,pr:m.pr,full:m.full?1:0},conn.peer);}});
       const gone=()=>{if(st.conns.get(conn.peer)===conn){st.conns.delete(conn.peer);remove(conn.peer);sendAll({t:'bye',peer:conn.peer});}};
       conn.on('close',gone); conn.on('error',gone);
     });
@@ -760,10 +764,10 @@ function PeerParty(code){
     to=setTimeout(()=>fail('timeout'),9000);
     p.on('open',id=>{st.me=id;
       const c=p.connect(hostId,{serialization:'json',reliable:true}); st.hostConn=c;
-      c.on('open',()=>{if(settled)return;settled=true;clearTimeout(to);try{c.send({t:'p',pr:st.mine})}catch(e){}startBeat();res(api);});
+      c.on('open',()=>{if(settled)return;settled=true;clearTimeout(to);try{c.send({t:'p',pr:st.mine,full:1})}catch(e){}startBeat();res(api);});
       c.on('data',m=>{st.lastHost=Date.now();if(!m||typeof m!=='object')return;
-        if(m.t==='roster'){for(const e of (m.list||[]))if(Array.isArray(e))upsert(e[0],e[1]);}
-        else if(m.t==='p')upsert(m.peer,m.pr);
+        if(m.t==='roster'){for(const e of (m.list||[]))if(Array.isArray(e))upsert(e[0],e[1],true);}
+        else if(m.t==='p')upsert(m.peer,m.pr,!!m.full);
         else if(m.t==='bye')remove(m.peer);
         else if(m.t==='full'){if(settled)lost('full');else fail('full');}});
       c.on('close',()=>{if(settled)lost('host-left');else fail('closed');});
@@ -825,7 +829,7 @@ async function connectNet(){
   if(typeof BroadcastChannel!=='undefined'){try{room=LocalNet();transport='local';bindChannel();return;}catch(e){}}
   transport='blocked';updateParty();
 }
-function dropRemotes(){for(const s of remotes.values()) if(!s.dead){s.dead=true;s.gone=true;} remotes.clear(); othersHere=0;}
+function dropRemotes(){for(const s of remotes.values()) if(!s.dead){s.dead=true;s.gone=true;} remotes.clear(); othersHere=0; if(typeof setRole==='function') setRole('solo',null);}
 async function bindChannel(){
   const key=netMode+'|'+partyCode+'|'+transport;
   if(chanBusy){updateParty();return;}
@@ -860,6 +864,7 @@ function onPeersChange(ch){
   let others=0;
   for(const p of ch.peers){ if(p.isMe&&p.sameTab) myPeer=p.peer; else if(p.kind!=='agent') others++; }
   othersHere=others;
+  computeRole();
   for(const p of ch.joined) if(!(p.isMe&&p.sameTab)&&p.kind!=='agent') onRemote(p);
   for(const p of ch.updated) if(!(p.isMe&&p.sameTab)&&p.kind!=='agent') onRemote(p);
   for(const p of ch.left){const s=remotes.get(p.peer); if(s&&!s.dead){s.dead=true;s.gone=true;} remotes.delete(p.peer);}
@@ -867,6 +872,8 @@ function onPeersChange(ch){
 }
 const num=(v,lo,hi)=>typeof v==='number'&&isFinite(v)?clamp(v,lo,hi):null;
 function onRemote(peer){
+  const w=peer.presence&&peer.presence.w;
+  if(w&&worldRole==='follower'&&peer.peer===worldHostPeer) applyWorld(w);
   const pr=peer.presence&&peer.presence.s; let s=remotes.get(peer.peer);
   if(!pr||typeof pr!=='object'){ if(s&&!s.dead){s.dead=true;s.gone=true;} remotes.delete(peer.peer); return; }
   if(pr.st==='play'){
@@ -897,6 +904,74 @@ function onRemote(peer){
   } else { if(s&&!s.dead){s.dead=true;s.gone=true;} remotes.delete(peer.peer); }
 }
 const NET_DELAY=110;
+/* ----- shared world: one device (the world host) runs the bots for everyone ----- */
+const netBots=new Map(); let lastWQ=-1,lastWT=-1,worldRole='solo', worldHostPeer=null, followSince=0, lastWorldRecv=0, lastWorld=0, worldSeq=0, seedIdx=0; const deadLog=[];
+const isHuman=s=>s.player||(s.remote&&!s.netbot);
+function computeRole(){
+  let role='solo', hostPeer=null;
+  if(chan&&othersHere>0){
+    if(transport==='peer'){ if(chan.isHost&&chan.isHost()) role='host'; else {role='follower'; hostPeer=PEER_PREFIX+(partyCode||ARENA);} }
+    else{ let ps=[]; try{ps=chan.peers()}catch(e){}
+      const elig=ps.filter(p=>p.kind!=='agent'&&p.presence&&p.presence.s&&['play','idle','dead'].includes(p.presence.s.st)).map(p=>p.peer).sort();
+      if(elig.length>1&&myPeer&&elig.includes(myPeer)){hostPeer=elig[0]; role=hostPeer===myPeer?'host':'follower';} }
+  }
+  // follower but the host isn't sending a world (older version, or stalled): keep our own bots
+  if(role==='follower'&&worldRole==='follower'&&performance.now()-Math.max(followSince,lastWorldRecv)>4000) role='solo';
+  setRole(role,role==='host'?myPeer:hostPeer);
+}
+function setRole(role,hostPeer){
+  if(role===worldRole&&hostPeer===worldHostPeer) return;
+  const prev=worldRole; worldRole=role; worldHostPeer=hostPeer;
+  if(role==='follower'){
+    followSince=performance.now();
+    for(const s of snakes) if(!s.player&&!s.remote&&!s.dead){s.dead=true;s.gone=true;}
+    if(prev==='host'&&chan){try{chan.presence({w:null})}catch(e){}}
+  } else {
+    // adopt the host's bots right where they are, so nothing pops when hosting changes hands
+    for(const [id,s] of netBots){ if(s.dead) continue; s.remote=false; s.netbot=false; s.buf=null; s.net=null; s.pers=pick(PERS); s.skill=rnd(.35,1); s.think=0; s.av=0; s.tAng=s.ang; }
+    netBots.clear();
+    if(role==='solo'&&prev==='host'&&chan){try{chan.presence({w:null})}catch(e){}}
+  }
+}
+function worldSend(){
+  if(!chan||worldRole!=='host'||othersHere<1) return;
+  const now=performance.now(); if(now-lastWorld<120) return; lastWorld=now;
+  const bots=snakes.filter(s=>!s.player&&!s.remote&&!s.dead), b=[], seeds=[];
+  for(const s of bots) b.push([s.uid,SKINS.indexOf(s.skin),Math.round(s.x),Math.round(s.y),Math.round(s.ang*1000)/1000,Math.round(s.mass),(s.boosting?1:0)|(s.pu.ghost>0?2:0)]);
+  for(let q=0;q<3&&bots.length;q++){const t=bots[(seedIdx++)%bots.length],n=t.n,st=Math.max(1,Math.ceil(n/24)),pts=[];
+    for(let i=0;i<n;i+=st)pts.push(Math.round(t.bx[i]),Math.round(t.by[i])); pts.push(Math.round(t.bx[n-1]),Math.round(t.by[n-1])); seeds.push([t.uid,t.name,pts]);}
+  while(deadLog.length&&now-deadLog[0].t>1500) deadLog.shift();
+  const w={q:++worldSeq,t:Math.round(now),b,s:seeds,d:deadLog.map(e=>[e.id,e.kb])};
+  if(transport==='claude'){let L=JSON.stringify(w).length; while(L>2900&&w.s.length){w.s.pop();L=JSON.stringify(w).length;}}
+  try{chan.presence({w}).catch(()=>{});}catch(e){}
+}
+function applyWorld(w){
+  if(!w||typeof w!=='object'||!Array.isArray(w.b)) return;
+  if(w.q===lastWQ&&w.t===lastWT) return; lastWQ=w.q; lastWT=w.t;
+  const now=performance.now(), ts0=num(w.t,0,1e13), ts=ts0===null?now:ts0; lastWorldRecv=now;
+  const seedMap=new Map(); if(Array.isArray(w.s)) for(const e of w.s) if(Array.isArray(e)&&e.length>=3) seedMap.set(e[0],e);
+  const seen=new Set();
+  for(const e of w.b){ if(!Array.isArray(e)||e.length<7) continue;
+    const id=num(e[0],0,1e12),k=num(e[1],-1,SKINS.length-1),x=num(e[2],-R*1.3,R*1.3),y=num(e[3],-R*1.3,R*1.3),a=num(e[4],-10,10),m=num(e[5],1,1e6),f=num(e[6],0,3);
+    if(id===null||x===null||y===null||a===null||m===null) continue;
+    seen.add(id); let s=netBots.get(id);
+    if(!s||s.dead){
+      s=baseSnake({name:'…',skin:SKINS[k!==null&&k>=0?k|0:0],mass:m}); s.remote=true; s.netbot=true; s.netId=id; s.x=x; s.y=y; s.ang=a; s.buf=[]; s.off=null; s.seeded=false;
+      const L=bodyLen(m)+60,steps=Math.ceil(L/8),tx=[],ty=[]; for(let j=steps;j>=0;j--){tx.push(x-Math.cos(a)*j*8);ty.push(y-Math.sin(a)*j*8);} s.tx=tx; s.ty=ty;
+      netBots.set(id,s); snakes.push(s); sizeUp(s); rebuildBody(s);
+    }
+    const sd=seedMap.get(id);
+    if(sd){ if(typeof sd[1]==='string') s.name=sd[1].replace(/[\u0000-\u001f]/g,'').slice(0,18)||s.name;
+      if(!s.seeded&&Array.isArray(sd[2])&&sd[2].length>=4&&sd[2].length<=200){const pts=[];let ok=true;for(const v of sd[2]){const q=num(v,-R*1.3,R*1.3);if(q===null){ok=false;break;}pts.push(q);}
+        if(ok){const tx=[],ty=[];for(let i=pts.length-2;i>=0;i-=2){tx.push(pts[i]);ty.push(pts[i+1]);}tx.push(s.x);ty.push(s.y);s.tx=tx;s.ty=ty;s.seeded=true;rebuildBody(s);}}}
+    const o=ts-now; s.off=s.off===null?o:Math.max(o,s.off-3);
+    const B=s.buf; if(!B.length||ts>B[B.length-1].t){B.push({t:ts,x,y,a,b:(f|0)&1,g:((f|0)&2)?1:0}); if(B.length>40)B.shift();}
+    s.lastRecv=now; s.mass=m; s.net=true;
+  }
+  if(Array.isArray(w.d)) for(const e of w.d){ if(!Array.isArray(e)) continue; const s=netBots.get(e[0]);
+    if(s&&!s.dead){const mass=s.mass; kill(s,-1); if(myPeer&&e[1]&&e[1]===myPeer&&player&&!player.dead&&state==='play') onPlayerKill(s,mass);} }
+  for(const [id,s] of netBots){ if(!seen.has(id)&&!s.dead){s.dead=true;s.gone=true;} if(s.dead) netBots.delete(id); }
+}
 function cr(p0,p1,p2,p3,t){const t2=t*t,t3=t2*t;return .5*((2*p1)+(-p0+p2)*t+(2*p0-5*p1+4*p2-p3)*t2+(-p0+3*p1-3*p2+p3)*t3);}
 function updateRemote(s,dt){
   const B=s.buf; if(!B||!B.length) return;
@@ -925,7 +1000,7 @@ function netSend(force){
   let pr;
   if(state==='play'&&player&&!player.dead){
     if(!force&&now-lastNet<55) return;
-    const n=player.n,stride=Math.max(1,Math.ceil(n/50)),p=[];
+    const n=player.n,stride=Math.max(1,Math.ceil(n/40)),p=[];
     for(let i=0;i<n;i+=stride) p.push(Math.round(player.bx[i]),Math.round(player.by[i]));
     if((n-1)%stride) p.push(Math.round(player.bx[n-1]),Math.round(player.by[n-1]));
     pr={st:'play',id:player.uid,t:Math.round(now),n:player.name,k:skinIdx,x:Math.round(player.x*10)/10,y:Math.round(player.y*10)/10,a:Math.round(player.ang*1000)/1000,m:Math.round(player.mass),b:player.boosting?1:0,g:player.pu.ghost>0?1:0,p};
@@ -951,7 +1026,7 @@ function memberRows(){
   return rows;
 }
 function updateWho(){}
-function humansPlaying(){let n=0;for(const s of snakes) if(s.remote&&!s.dead) n++;return n;}
+function humansPlaying(){let n=0;for(const s of snakes) if(s.remote&&!s.netbot&&!s.dead) n++;return n;}
 function updateParty(){
   const el=$('live'); if(!el) return; el.classList.remove('off');
   $('mOnline').classList.toggle('on',netMode==='online'); $('mSolo').classList.toggle('on',netMode==='solo');
@@ -997,6 +1072,8 @@ addEventListener('pointermove',e=>{
 const endPtr=e=>{if(e.pointerType==='mouse'){mouseDown=false;return;} if(e.pointerId===joy.id){joy.active=false;joy.id=-1;} extra.delete(e.pointerId);};
 addEventListener('pointerup',endPtr); addEventListener('pointercancel',endPtr);
 addEventListener('contextmenu',e=>e.preventDefault());
+function setZoom(m){zoomMul=clamp(m,.6,2.5);store.set('slc_zoom',String(Math.round(zoomMul*100)/100));}
+cvs.addEventListener('wheel',e=>{e.preventDefault();setZoom(zoomMul*Math.exp(-e.deltaY*(e.deltaMode===1?.05:.0015)));},{passive:false});
 const boostEl=$('boost');
 boostEl.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();boostBtn=true;boostEl.classList.add('on');try{boostEl.setPointerCapture(e.pointerId)}catch(_){}});
 const bUp=()=>{boostBtn=false;boostEl.classList.remove('on');};
@@ -1012,6 +1089,9 @@ addEventListener('keydown',e=>{
   if(k==='a'||k==='A'||k==='ArrowLeft'){keyTurn=-1;setMode('keys');}
   if(k==='d'||k==='D'||k==='ArrowRight'){keyTurn=1;setMode('keys');}
   if(k==='m'||k==='M') toggleMute();
+  if(k==='='||k==='+') setZoom(zoomMul*1.15);
+  if(k==='-'||k==='_') setZoom(zoomMul/1.15);
+  if(k==='0') setZoom(1);
 });
 addEventListener('keyup',e=>{const k=e.key;if(isBoostKey(k))keyBoost=false;
   if((k==='a'||k==='A'||k==='ArrowLeft')&&keyTurn<0)keyTurn=0;if((k==='d'||k==='D'||k==='ArrowRight')&&keyTurn>0)keyTurn=0;});
@@ -1025,7 +1105,7 @@ function playerInput(){
 }
 
 /* ---------- camera & render ---------- */
-let K=1,OX=0,OY=0,vx0=0,vx1=0,vy0=0,vy1=0;
+let K=1,OX=0,OY=0,vx0=0,vx1=0,vy0=0,vy1=0, zoomMul=clamp(+store.get('slc_zoom','1')||1,.6,2.5);
 const SX=new Float32Array(MAXSEG+2),SY=new Float32Array(MAXSEG+2),WX=new Float32Array(MAXSEG+2),WY=new Float32Array(MAXSEG+2);
 // smooth the path, then add a lateral S-wave that is fixed in the world (body flows through it like a real snake)
 function undulate(s){
@@ -1046,6 +1126,7 @@ function updateCam(dt){
   if(state==='play'&&player&&!player.dead){tx=player.x;ty=player.y;tz=clamp(Math.hypot(W,H)/2/(150+(player.rs||player.r)*30),.12,3);ks=9;}
   else if(state==='dying'||state==='over'){tz=base*.7;}
   else if(leader){tx=leader.x;ty=leader.y;tz=base*clamp(.8-(leader.r-6)*.005,.32,.8);}
+  tz*=zoomMul;
   const k=1-Math.exp(-dt*ks); cam.x+=(tx-cam.x)*k; cam.y+=(ty-cam.y)*k; cam.z+=(tz-cam.z)*(1-Math.exp(-dt*2));
 }
 function waterSources(){
@@ -1299,7 +1380,7 @@ function render(){
   ctx.setTransform(K,0,0,K,OX,OY);
   ctx.font=`600 ${12/z}px system-ui,sans-serif`; ctx.textAlign='center'; ctx.textBaseline='bottom';
   for(const s of snakes){ if(s.dead||s===player) continue; if(s.x<vx0||s.x>vx1||s.y<vy0||s.y>vy1) continue;
-    ctx.fillStyle=s.remote?'rgba(190,220,160,.95)':'rgba(243,235,221,.6)'; ctx.fillText(s.remote?'● '+s.name:s.name,s.x,s.y-s.r*1.3-8/z); }
+    const hu=s.remote&&!s.netbot; ctx.fillStyle=hu?'rgba(190,220,160,.95)':'rgba(243,235,221,.6)'; ctx.fillText(hu?'● '+s.name:s.name,s.x,s.y-s.r*1.3-8/z); }
   if(leader&&!leader.dead&&leader.x>vx0&&leader.x<vx1&&leader.y>vy0&&leader.y<vy1){
     const off=leader===player?leader.r*1.3+16/z:leader.r*1.3+30/z; drawSparkle(leader.x,leader.y-off,9/z,'#D97757',clock*1.5,3/z);
   }
@@ -1321,12 +1402,12 @@ function updateHud(){
   leader=alive[0]||null;
   targetBots=Math.max(18,NBOTS-humansPlaying()*4);
   if(state!=='play'||!player||player.dead) return;
-  const LBN=W<520?6:8, humans=alive.filter(s=>s.player||s.remote), shared=!!chan&&humans.length>1;
+  const LBN=W<520?6:8, humans=alive.filter(isHuman), shared=!!chan&&humans.length>1&&worldRole==='solo';
   const board=shared?humans:alive, rank=board.indexOf(player)+1; if(rank>0) stats.bestRank=Math.min(stats.bestRank,rank);
   lbTitle.textContent=shared?'Players':'Leaderboard';
   scoreEl.textContent=fmt(player.mass); rankEl.textContent=shared?`Rank ${rank} of ${humans.length} players`:`Rank ${rank} of ${alive.length}`;
   const h=humansPlaying(); onlineEl.textContent=chan?(h?`● ${h+1} humans${partyCode?' · party '+partyCode:''}`:`● online${partyCode?' · party '+partyCode:''} · waiting for players`):'';
-  let html=''; board.slice(0,LBN).forEach((s,i)=>{html+=`<li class="${s===player?'me':''}${s.remote?' hum':''}"><span class="nm">${i+1}. ${esc(s.name)}</span><span>${fmt(s.mass)}</span></li>`;});
+  let html=''; board.slice(0,LBN).forEach((s,i)=>{html+=`<li class="${s===player?'me':''}${s.remote&&!s.netbot?' hum':''}"><span class="nm">${i+1}. ${esc(s.name)}</span><span>${fmt(s.mass)}</span></li>`;});
   if(rank>LBN) html+=`<li class="me sep"><span class="nm">${rank}. ${esc(player.name)}</span><span>${fmt(player.mass)}</span></li>`;
   if(shared) html+=`<li class="sep" style="opacity:.6"><span class="nm">+ ${alive.length-humans.length} bots</span><span>yours only</span></li>`;
   lbl.innerHTML=html;
@@ -1400,7 +1481,7 @@ setWorld(world);
 function refreshMenu(){
   $('best').innerHTML=`Best length: <b>${fmt(+store.get('slc_best','0'))}</b>`;
   $('tip').textContent=pick(TIPS);
-  $('hint').textContent=inputMode==='touch'?'Touch anywhere to drop a joystick and steer · hold BOOST to speed up':'Mouse to steer · click, hold Space or W to boost · A/D also steer · M mutes';
+  $('hint').textContent=inputMode==='touch'?'Touch anywhere to drop a joystick and steer · hold BOOST to speed up':'Mouse to steer · click, hold Space or W to boost · scroll to zoom · A/D also steer · M mutes';
   updateLive();
 }
 refreshMenu();
@@ -1448,11 +1529,11 @@ function frame(t){
   waterTrack(); wAcc=Math.min(wAcc+dt,.034);
   if(world==='water'){while(wAcc>=1/60){wAcc-=1/60; waterSources(); waterStep();} waterRender();}
   else{while(wAcc>=1/60){wAcc-=1/60; grassSources(); grassStep();}}
-  hudT-=dt; if(hudT<=0){hudT=.2;updateHud();if(state==='menu')updateParty();}
+  hudT-=dt; if(hudT<=0){hudT=.2;computeRole();updateHud();if(state==='menu')updateParty();}
   miniT-=dt; if(miniT<=0){miniT=.1;drawMini();}
   if(state==='dying'&&clock-stats.diedAt>1.5) showOver();
   shake*=Math.exp(-dt*9); if(shake<.2) shake=0;
-  boostAudio(); netSend(false); render();
+  boostAudio(); netSend(false); worldSend(); render();
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
