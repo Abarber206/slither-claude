@@ -642,7 +642,8 @@ let marks=[], snakes=[], pellets=[], pus=[], parts=[], player=null, leader=null,
 const stats={kills:0,start:0,bestRank:99,diedAt:0,killer:null,killerPeer:null,deadId:0,lastKill:-99,streak:0,finalMass:0};
 
 /* ---------- snakes ---------- */
-const spm=s=>1+(s.r-6)*.012;
+// tiny snakes are slower (they also see less); speed builds up as they grow
+const spm=s=>{const t=clamp((s.r-6)/16,0,1); return (.7+.3*t*t*(3-2*t))+(s.r-6)*.012;};
 const bodyLen=m=>m<2000?40+m*1.1:2240+(m-2000)*.35;
 function sizeUp(s){const m=Math.max(0,s.mass);s.r=Math.min(110,4+Math.sqrt(m)*.5);if(s.rs===undefined)s.rs=s.r;const L=bodyLen(m);s.spacing=Math.max(s.rs*.4,L/MAXSEG);s.nTarget=Math.max(8,Math.min(MAXSEG,Math.floor(L/s.spacing)));}
 function baseSnake(o){
@@ -1700,7 +1701,9 @@ addEventListener('pointermove',e=>{
 const endPtr=e=>{if(e.pointerType==='mouse'){mouseDown=false;return;} if(e.pointerId===joy.id){joy.active=false;joy.id=-1;} extra.delete(e.pointerId);};
 addEventListener('pointerup',endPtr); addEventListener('pointercancel',endPtr);
 addEventListener('contextmenu',e=>e.preventDefault());
-function setZoom(m){zoomMul=clamp(m,.6,2.5);store.set('slc_zoom',String(Math.round(zoomMul*100)/100));}
+// how far you may zoom out grows with your size: tiny snakes keep a close view
+function zoomMin(){const r=state==='play'&&player&&!player.dead?(player.rs||player.r):40; return .97-.37*smooth(9,45,r);}
+function setZoom(m){zoomMul=clamp(m,zoomMin(),2.5);store.set('slc_zoom',String(Math.round(zoomMul*100)/100));}
 cvs.addEventListener('wheel',e=>{e.preventDefault();setZoom(zoomMul*Math.exp(-e.deltaY*(e.deltaMode===1?.05:.0015)));},{passive:false});
 const boostEl=$('boost');
 boostEl.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();boostBtn=true;boostEl.classList.add('on');try{boostEl.setPointerCapture(e.pointerId)}catch(_){}});
@@ -1755,7 +1758,7 @@ function updateCam(dt){
   if(state==='play'&&player&&!player.dead){tx=player.x;ty=player.y;tz=clamp(Math.hypot(W,H)/2/(150+(player.rs||player.r)*30),.12,3);ks=9;}
   else if(state==='dying'||state==='over'){tz=base*.7;}
   else if(leader){tx=leader.x;ty=leader.y;tz=base*clamp(.8-(leader.r-6)*.005,.32,.8);}
-  tz*=zoomMul;
+  tz*=Math.max(zoomMul,zoomMin());
   const k=1-Math.exp(-dt*ks); cam.x+=(tx-cam.x)*k; cam.y+=(ty-cam.y)*k; cam.z+=(tz-cam.z)*(1-Math.exp(-dt*2));
 }
 function waterSources(){
