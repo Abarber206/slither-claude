@@ -541,7 +541,7 @@ function drawMeadow(){
       if(tw<.25&&bmS>.08&&bmS<.64){const e=Math.min(1,(bmS-.08)/.14)*Math.min(1,(.64-bmS)/.12); GOV.push(siR,x,y,sz,fa*(1-pw)*e*.5,lx,ly,0);}}
     if(pw>0){const mi=fm<.43?1:fm<.64?2:fm<.85?3:4, A=Math.atan2(fy,fx)*DQ; let di=Math.round(A); di=((di%GD)+GD)%GD;
       siP=(vrow+mi)*GD+di; ctx.globalAlpha=fa*pw; tuftAt(siP,x,y,sz,0,0);}
-    if(tw>.25&&bmS>.01){const useP=pw>.5&&siP>=0; TOV.push(useP?siP:siR,x,y,sz,fa*clamp((tw-.25)/.35,0,1)*.93,useP?0:lx,useP?0:ly,0);}
+    if(tw>.25&&bmS>.01){TOV.push(siR>=0?siR:siP,x,y,sz,fa*clamp((tw-.25)/.35,0,1),siR>=0?lx:0,siR>=0?ly:0,0);}
   }
   ctx.globalAlpha=1; ctx.setTransform(K,0,0,K,OX,OY);
   }
@@ -581,7 +581,8 @@ function resize(){DPR=Math.min(2,window.devicePixelRatio||1)*RS;W=innerWidth;H=i
 function setRes(rs){RS=rs; DPR=Math.min(2,window.devicePixelRatio||1)*RS; cvs.width=Math.round(W*DPR); cvs.height=Math.round(H*DPR);}
 let resAcc=0,resN=0,resCool=0;
 function tuneRes(dt){ if(document.hidden) return; resAcc+=dt; resN++; resCool-=dt; if(resAcc<1.2) return; const avg=resAcc/resN*1000; resAcc=0; resN=0; if(resCool>0) return;
-  if(avg>20&&RS>.5){setRes(Math.max(.5,RS*.82)); resCool=1.5;} else if(avg<10.5&&RS<1){setRes(Math.min(1,RS*1.12)); resCool=4;} }
+  const minRS=IS_FF?.5:.75, grassFloor=world!=='meadow'||grassQ<=(IS_FF?.26:.36);
+  if(avg>24&&RS>minRS&&grassFloor){setRes(Math.max(minRS,RS*.9)); resCool=2;} else if(avg<12&&RS<1){setRes(Math.min(1,RS*1.1)); resCool=3;} }
 addEventListener('resize',resize);
 
 /* ---------- sprites ---------- */
@@ -1269,8 +1270,8 @@ function drawBigCritter(c,t){
     ctx.globalAlpha=1;
   }
 }
-function drawCritters(){
-  for(const c of CRIT){ const T=CR[c.t], L=T.L*c.sc; if(c.x<vx0-40||c.x>vx1+40||c.y<vy0-40||c.y>vy1+40) continue;
+function drawCritters(list){
+  for(const c of (list||CRIT)){ const T=CR[c.t], L=T.L*c.sc; if(c.x<vx0-40||c.x>vx1+40||c.y<vy0-40||c.y>vy1+40) continue;
     const lift=c.h, sc=1+lift/(c.fly||lift>30?180:260), px=c.x-lift*.25, py=c.y-lift*.45, spx=L*cam.z;
     if(c.t!=='fish'&&c.t!=='pike'){const air=Math.min(1,lift/40);
       ctx.fillStyle=`rgba(4,8,2,${.34-air*.2})`; ctx.beginPath(); ctx.ellipse(c.x+L*.2+lift*.25,c.y+L*.28+lift*.35,L*.52/sc,L*.3/sc,c.a,0,TAU); ctx.fill();
@@ -2104,14 +2105,17 @@ function drawSnake(s,aMul,noShadow){
   const sk=s.skin,n=s.n,r=s.rs||s.r,bx=s.bx,by=s.by,m=r*2.6;
   const baseA=(s.pu.ghost>0?.4+.12*Math.sin(clock*12):1)*(aMul||1);
   undulate(s);
+  // how much of this snake is down in tall grass (others nearly vanish; you stay faintly visible)
+  const isMe=s===player||s.meHL, hideMax=isMe?.6:.9;
+  let hideS=0; if(world==='meadow'&&!aMul){ const hs=Math.max(1,n>>3); let c2=0; for(let i=0;i<n;i+=hs){hideS+=smooth(.25,.7,tallAt(WX[i],WY[i]));c2++;} hideS/=c2; }
   ctx.setTransform(K,0,0,K,OX,OY);
   // shadow cast on the ground: one snake-shaped silhouette, offset and tapering at the tail
   {let vis=false; const vs=Math.max(1,n>>6), mm=m+vs*s.spacing; for(let i=0;i<n;i+=vs){const x=WX[i],y=WY[i]; if(x>vx0-mm&&x<vx1+mm&&y>vy0-mm&&y<vy1+mm){vis=true;break;}}
    if(!vis){const x=WX[n-1],y=WY[n-1]; if(x>vx0-mm&&x<vx1+mm&&y>vy0-mm&&y<vy1+mm) vis=true;}
    if(!vis){ctx.globalAlpha=1;return;}
-   if(!noShadow){
+   if(!noShadow&&hideS<.98){ ctx.globalAlpha=baseA*(1-hideS*.95);
    const sox=r*.42+3, soy=r*.58+4, st=Math.max(1,Math.floor(n/160)), tl=Math.max(4,Math.floor(n*.3)), cut=Math.max(1,n-tl);
-   ctx.lineCap='round'; ctx.lineJoin='round'; ctx.globalAlpha=baseA;
+   ctx.lineCap='round'; ctx.lineJoin='round'; ctx.globalAlpha=baseA*(1-hideS*.95);
    const seg=(a,b)=>{ctx.beginPath();ctx.moveTo(WX[a]+sox,WY[a]+soy);for(let i=a+st;i<b;i+=st)ctx.lineTo(WX[i]+sox,WY[i]+soy);ctx.lineTo(WX[b-1]+sox,WY[b-1]+soy);};
    ctx.strokeStyle='rgba(4,8,2,.13)'; ctx.lineWidth=r*2.7; seg(0,cut); ctx.stroke();
    ctx.strokeStyle='rgba(4,8,2,.2)'; ctx.lineWidth=r*2.05; seg(0,cut); ctx.stroke();
@@ -2137,7 +2141,7 @@ function drawSnake(s,aMul,noShadow){
     ctx.globalCompositeOperation='source-over';
   }
   ctx.globalAlpha=baseA;
-  bodyOutline(WX,WY,n,r,Math.max(1.6/cam.z,r*.13),rimCol(sk));
+  ctx.globalAlpha=baseA*(1-hideS*hideMax); bodyOutline(WX,WY,n,r,Math.max(1.6/cam.z,r*.13),rimCol(sk)); ctx.globalAlpha=baseA;
   const bspr=bodySprites(sk), KB=bspr.length, tailLen=Math.max(6,Math.floor(n*.3)), sw=s.spacing*1.85;
   const lit=r*K/DPR>2.2, lifted=r*K/DPR>6&&computeLift(s), rimC=rimCol(sk), ext=Math.max(1.6/cam.z,r*.13)*.5, sox=r*.32, soy=r*.5;
   for(let i=n-1;i>=1;i--){
@@ -2146,12 +2150,13 @@ function drawSnake(s,aMul,noShadow){
     const t=n-1-i; let rr=t<tailLen?r*(.22+.78*Math.pow(t/tailLen,.6)):r;
     ctx.setTransform(K*c,K*sn,-K*sn,K*c,K*x+OX,K*y+OY);
     const lv=lifted?LIFT[i]:0;
+    let segA=baseA; if(hideS>0){const hk=smooth(.25,.7,tallAt(x,y)); if(hk>0){segA=baseA*(1-hk*hideMax); if(segA<.02) continue;}} ctx.globalAlpha=segA;
     if(lv>.02){ // arching over: shadow on whatever is below, then its own outline, slightly larger
       const lx=c*sox+sn*soy, ly=-sn*sox+c*soy, ss=rr*2.9;
-      ctx.globalAlpha=baseA*.5*lv; ctx.drawImage(SHADOW,lx-ss/2,ly-ss/2,ss,ss);
-      rr*=1+.09*lv; ctx.globalAlpha=baseA*lv; ctx.fillStyle=rimC; ctx.fillRect(-sw/2,-rr-ext,sw,(rr+ext)*2); ctx.globalAlpha=baseA;}
+      ctx.globalAlpha=segA*.5*lv; ctx.drawImage(SHADOW,lx-ss/2,ly-ss/2,ss,ss);
+      rr*=1+.09*lv; ctx.globalAlpha=segA*lv; ctx.fillStyle=rimC; ctx.fillRect(-sw/2,-rr-ext,sw,(rr+ext)*2); ctx.globalAlpha=segA;}
     ctx.drawImage(sk.batl,(i%KB)*(BSW+2)+1,0,BSW,BSH,-sw/2,-rr,sw,rr*2);
-    if(lit){const dot=.707*(sn-c); if(dot>.05||dot<-.05){ctx.globalAlpha=baseA*(dot>0?dot:-dot); ctx.drawImage(LITA,dot>0?BSW:0,0,BSW,BSH,-sw/2,-rr,sw,rr*2); ctx.globalAlpha=baseA;}}
+    if(lit){const dot=.707*(sn-c); if(dot>.05||dot<-.05){ctx.globalAlpha=segA*(dot>0?dot:-dot); ctx.drawImage(LITA,dot>0?BSW:0,0,BSW,BSH,-sw/2,-rr,sw,rr*2); ctx.globalAlpha=segA;}}
   }
   const hx=WX[0],hy=WY[0];
   if(hx>vx0-m&&hx<vx1+m&&hy>vy0-m&&hy<vy1+m){
@@ -2161,14 +2166,15 @@ function drawSnake(s,aMul,noShadow){
     s.hangS=s.hangS===undefined?ta:s.hangS+angDiff(ta,s.hangS)*.35;
     const c=Math.cos(s.hangS), sn=Math.sin(s.hangS);
     s.hang=s.hangS; s.hx=hx; s.hy=hy;
-    ctx.setTransform(K*c,K*sn,-K*sn,K*c,K*hx+OX,K*hy+OY); drawHead(s,r*1.04); if(lit) headLight(s,r*1.04,c,sn);
+    const hh=hideS>0?smooth(.25,.7,tallAt(hx,hy)):0; ctx.globalAlpha=baseA*(1-hh*hideMax);
+    ctx.setTransform(K*c,K*sn,-K*sn,K*c,K*hx+OX,K*hy+OY); if(ctx.globalAlpha>.02){drawHead(s,r*1.04); if(lit) headLight(s,r*1.04,c,sn);}
   }
   ctx.setTransform(K,0,0,K,OX,OY); ctx.globalAlpha=1;
 }
 function render(){
   if(state==='replay'&&rp) replaySnakes();
   const z=cam.z; let sx=0,sy=0; if(shake>0){sx=rnd(-shake,shake);sy=rnd(-shake,shake);}
-  ctx.setTransform(DPR,0,0,DPR,0,0); ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='low';
+  ctx.setTransform(DPR,0,0,DPR,0,0); ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality=IS_FF?'low':'medium';
   K=DPR*z; OX=DPR*(W/2-cam.x*z+sx); OY=DPR*(H/2-cam.y*z+sy);
   if(world==='water'){ ctx.fillStyle='#05060a'; ctx.fillRect(0,0,W,H); vx0=cam.x-W/2/z-30; vx1=cam.x+W/2/z+30; vy0=cam.y-H/2/z-30; vy1=cam.y+H/2/z+30; ctx.setTransform(K,0,0,K,OX,OY); drawSand(); ctx.setTransform(DPR,0,0,DPR,0,0); ctx.drawImage(wcv,0,0,gw,gh,(-1-wShX)*WC+sx,(-1-wShY)*WC+sy,gw*WC,gh*WC); }
   ctx.setTransform(K,0,0,K,OX,OY);
@@ -2192,7 +2198,8 @@ function render(){
   // pellets
   ctx.globalCompositeOperation='lighter';
   {const byCol=new Map();
-   for(const p of pellets){ if(p.x<vx0||p.x>vx1||p.y<vy0||p.y>vy1) continue; let L=byCol.get(p.col); if(!L){L=[];byCol.set(p.col,L);} L.push(p); }
+   if(state==='replay'&&rp){ const PL=rpFrame().PL; for(let q=0;q<PL.length;q+=4){ const x=PL[q],y=PL[q+1]; if(x<vx0||x>vx1||y<vy0||y>vy1) continue; let L=byCol.get(PL[q+3]); if(!L){L=[];byCol.set(PL[q+3],L);} L.push({x,y,r:PL[q+2],ph:q,nat:true,life:9}); } }
+   else for(const p of pellets){ if(p.x<vx0||p.x>vx1||p.y<vy0||p.y>vy1) continue; let L=byCol.get(p.col); if(!L){L=[];byCol.set(p.col,L);} L.push(p); }
    const nb=1+.45*NIGHT;
    for(const [col,L] of byCol){ const img=glow(col);
      for(const p of L){ const s=p.r*6*(1+.16*Math.sin(clock*3+p.ph))*nb, a=(!p.nat&&p.life<3)?p.life/3:1; if(ctx.globalAlpha!==a) ctx.globalAlpha=a; ctx.drawImage(img,p.x-s/2,p.y-s/2,s,s); } }}
@@ -2205,7 +2212,7 @@ function render(){
   }
   const nightOv=NIGHT>.01;
   if(nightOv){ if(ovc.width!==cvs.width||ovc.height!==cvs.height){ovc.width=cvs.width;ovc.height=cvs.height;} octx.setTransform(K,0,0,K,OX,OY); octx.clearRect(vx0-100,vy0-100,vx1-vx0+200,vy1-vy0+200); octx.setTransform(1,0,0,1,0,0); octx.clearRect(0,0,ovc.width,ovc.height); ctx=octx; ctx.setTransform(K,0,0,K,OX,OY); }
-  drawCritters();
+  drawCritters(state==='replay'&&rp?rpFrame().CL:null);
   // snakes: smaller first so giants pass over
   if(state==='replay'&&rp){ for(const s of replaySnakes()) drawSnake(s); }
   else{
@@ -2229,7 +2236,7 @@ function render(){
     ctx.globalAlpha=1;}
   // you always see yourself: a faint silhouette of your snake shows through tall grass
   if(world==='meadow'&&TOV.length&&state!=='replay'&&player&&!player.dead){ let inTall=false; const st=Math.max(1,player.n>>3); for(let i=0;i<player.n;i+=st) if(tallAt(player.bx[i],player.by[i])>.3){inTall=true;break;}
-    if(inTall) drawSnake(player,.42,true); }
+    if(inTall) drawSnake(player,.22,true); }
   if(world==='water') drawReeds();
   if(nightOv){ ctx.setTransform(1,0,0,1,0,0); ctx.globalCompositeOperation='source-atop'; ctx.fillStyle=`rgba(6,12,32,${.55*NIGHT})`; ctx.fillRect(0,0,ovc.width,ovc.height);
     // orbs light up the snakes and animals next to them (only where something is drawn on this layer)
@@ -2445,16 +2452,21 @@ $('statsBack').addEventListener('click',()=>{statsScr.classList.add('hidden');me
 /* ---------- death replay: the last 2 seconds before you died, in slow motion ---------- */
 const RP=[]; let rpAcc=0, rp=null, lastRp=null;
 function rpCapture(dt){
-  rpAcc+=dt; if(rpAcc<1/30) return; rpAcc=0;
+  rpAcc+=dt; if(rpAcc<1/60) return; rpAcc=0;
   const hw=W/2/cam.z*1.3+150, hh=H/2/cam.z*1.3+150, L=[];
   for(const s of snakes){ if(s.dead||s.n<2) continue;
     const reach=Math.min(4000,s.n*s.spacing); if(Math.abs(s.x-cam.x)>hw+reach||Math.abs(s.y-cam.y)>hh+reach) continue;
-    undulate(s); const r=s.rs||s.r, st=Math.max(1,Math.round(r*.8/s.spacing)), m=Math.min(240,Math.ceil(s.n/st)+1), P=new Float32Array(m*2);
+    undulate(s); const r=s.rs||s.r, st=Math.max(1,Math.round(r*.42/s.spacing)), m=Math.min(600,Math.ceil(s.n/st)+1), P=new Float32Array(m*2);
     let k=0; for(let i=0;i<s.n&&k<m-1;i+=st){P[k*2]=WX[i];P[k*2+1]=WY[i];k++;} P[k*2]=WX[s.n-1];P[k*2+1]=WY[s.n-1];k++;
     L.push({u:s.uid,sk:s.skin,r,P,k,a:s.hangS===undefined?s.ang:s.hangS,me:s===player,b:s.boosting,gh:s.pu.ghost>0});}
-  RP.push({t:clock,x:cam.x,y:cam.y,z:cam.z,L});
+  // the orbs and animals around you at this moment, so the replay shows them as they were
+  const PL=[], CL=[]; const px0=cam.x-hw, px1=cam.x+hw, py0=cam.y-hh, py1=cam.y+hh;
+  for(const p of pellets){ if(p.x<px0||p.x>px1||p.y<py0||p.y>py1) continue; PL.push(p.x,p.y,p.r,p.col); if(PL.length>2400) break; }
+  for(const c of CRIT){ if(c.x<px0||c.x>px1||c.y<py0||c.y>py1) continue; CL.push({t:c.t,x:c.x,y:c.y,a:c.a,h:c.h,sc:c.sc,run:c.run,fly:c.fly,curl:c.curl,col:c.col,ph:c.ph,ant:c.ant}); }
+  RP.push({t:clock,x:cam.x,y:cam.y,z:cam.z,L,PL,CL});
   while(RP.length&&RP[0].t<clock-2.8) RP.shift();
 }
+function rpFrame(){ const F=rp.F; let i=0; while(i<F.length-1&&F[i+1].t<=rp.t) i++; return F[i]; }
 function startReplay(rec){
   rp={F:rec.F,t0:rec.t0,t1:rec.t1,t:rec.t0,who:rec.who}; state='replay';
   hudEl.classList.add('hidden'); overEl.classList.add('hidden');
