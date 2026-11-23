@@ -258,8 +258,20 @@ function shiftBuf(src,dst,ix,iy){
   const x0=Math.max(0,-ix),x1=Math.min(gw,gw-ix);
   for(let y=0;y<gh;y++){const sy=y+iy; if(sy<0||sy>=gh) continue; const so=sy*gw+ix,dof=y*gw; for(let x=x0;x<x1;x++) dst[dof+x]=src[so+x];}
 }
+let wZ=0;
 function waterTrack(){
-  const z=cam.z; wShX+=(cam.x-wLX)*z/WC; wShY+=(cam.y-wLY)*z/WC; wLX=cam.x; wLY=cam.y;
+  const z=cam.z;
+  if(!wZ) wZ=z;
+  if(Math.abs(z-wZ)>wZ*.01){ // zoom changed: resample the screen-space fields so trails stay put
+    const f=wZ/z, cx=(W/2)/WC+1+wShX, cy=(H/2)/WC+1+wShY;
+    for(const A of (world==='water'?[wa,wb,hA,hB,fO]:[gF,gK,GBx,GBy,GVx,GVy])){
+      for(let y=0;y<gh;y++){const sy=Math.round(cy+(y-cy)*f); const row=y*gw;
+        if(sy<0||sy>=gh){for(let x=0;x<gw;x++) wt1[row+x]=0; continue;}
+        const srow=sy*gw; for(let x=0;x<gw;x++){const sx=Math.round(cx+(x-cx)*f); wt1[row+x]=(sx>=0&&sx<gw)?A[srow+sx]:0;}}
+      A.set(wt1);
+    }
+    wZ=z;
+  } wShX+=(cam.x-wLX)*z/WC; wShY+=(cam.y-wLY)*z/WC; wLX=cam.x; wLY=cam.y;
   const ix=Math.trunc(wShX), iy=Math.trunc(wShY);
   if(ix||iy){wShX-=ix;wShY-=iy;
     for(const A of (world==='water'?[wa,wb,hA,hB,fO]:[gF,gK,GBx,GBy,GVx,GVy])){shiftBuf(A,wt1,ix,iy);A.set(wt1);}
@@ -346,12 +358,15 @@ const BCOL=['#3b711f','#427b23','#3a6b1e','#335f1a'], TCOL=['#76b443','#83bf4b',
 function drawMeadow(){
   const z=cam.z;
   ctx.fillStyle=ground; ctx.fillRect(vx0,vy0,vx1-vx0,vy1-vy0);
-  const target=Math.max(9,Math.sqrt(W*H/3200));
-  let S=18; while(S*z<target) S*=2;
+  // fixed blade budget (~1100 on screen at any zoom), thinned evenly by a per-blade hash so it stays stable
+  const target=Math.max(9,Math.sqrt(W*H/1100));
+  let S=18; while(S*z<target*.72) S*=2;
+  const keep=Math.min(1,(S*z/target)**2);
   const i0=Math.floor(vx0/S)-1,i1=Math.ceil(vx1/S)+1,j0=Math.floor(vy0/S)-1,j1=Math.ceil(vy1/S)+1;
   for(const b of BL) b.length=0; for(const b of BT) b.length=0;
   const t=clock, wang=.65+Math.sin(t*.11)*.45, wcx=Math.cos(wang), wcy=Math.sin(wang), R2=(R-20)*(R-20);
   for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++){
+    if(keep<1&&GH(i,j,4)>keep) continue;
     const h1=GH(i,j,1),h2=GH(i,j,2),h3=GH(i,j,3);
     const x=(i+h1*.9)*S, y=(j+h2*.9)*S; if(x*x+y*y>R2) continue;
     const L=S*(1.15+.9*h3);
@@ -655,7 +670,7 @@ function kill(s,k){
   if(near){burst(s.x,s.y,sk.gc||sk.base,26,260+s.r*3,1.4);burst(s.x,s.y,'#F3EBDD',10,180,.9);
     if(world==='meadow'){burst(s.x,s.y,'#7fae4a',22,260,1.1);burst(s.x,s.y,'#c9df8a',10,180,.9);}
     for(let q=0;q<Math.min(12,s.n);q++){const i=Math.floor(q/12*s.n);if(world==='water'){ripple(s.bx[i],s.by[i],s.r*2.5,1.6);ripple(s.bx[i],s.by[i],s.r*1.8,6,hA);}else{trample(s.bx[i],s.by[i],s.r*3,0,0,1,s.r);}}}
-  if(killer&&!killer.dead) killer.kills++;
+  if(killer&&!killer.dead){killer.kills++; if(!killer.player&&!killer.remote) killer.mass+=mass*.06+15;}
   if(!s.player&&!s.remote&&worldRole==='host') deadLog.push({id:s.uid,kb:killer?(killer.player?myPeer:(killer.remote&&!killer.netbot?killer.peer:'')):'',t:performance.now()});
   if(s.player){onPlayerDeath(killer,mass);return;}
   if(s.remote){s.gone=true;return;}
@@ -729,9 +744,9 @@ function onPlayerEat(p){
   if(parts.length<400) parts.push({x:p.x,y:p.y,vx:rnd(-40,40),vy:rnd(-40,40),life:.35,max:.35,col:p.col,size:p.r*4});
 }
 function onPlayerKill(s,mass){
-  stats.kills++;
+  stats.kills++; if(player&&!player.dead) player.mass+=mass*.06+15;
   stats.streak=clock-stats.lastKill<8?stats.streak+1:1; stats.lastKill=clock;
-  feed(`You devoured <b>${esc(s.name)}</b>${s.remote&&!s.netbot?' <span style="color:#9DB17C">●</span>':''} <span style="opacity:.6">+${fmt(mass*.8)}</span>`);
+  feed(`You devoured <b>${esc(s.name)}</b>${s.remote&&!s.netbot?' <span style="color:#9DB17C">●</span>':''} <span style="opacity:.6">+${fmt(mass*.06+15)} now, +${fmt(mass*.8)} in orbs</span>`);
   if(stats.streak>=2) feed(stats.streak===2?'Double devour!':stats.streak===3?'Triple devour!':'Unstoppable ✦','big');
   [523.25,659.25,783.99,1046.5].forEach((f,i)=>tone(f,.22,'triangle',.08,0,i*.06));
   shake=Math.min(10,4+mass/300); vibrate(35);
@@ -1394,8 +1409,24 @@ function drawSnake(s){
   const baseA=s.pu.ghost>0?.4+.12*Math.sin(clock*12):1;
   undulate(s);
   ctx.setTransform(K,0,0,K,OX,OY);
-  ctx.globalAlpha=baseA*.6; const ss=r*2.8,sox=r*.25-ss/2,soy=r*.38-ss/2;
-  for(let i=n-1;i>=0;i-=3){const x=WX[i],y=WY[i];if(x<vx0-m||x>vx1+m||y<vy0-m||y>vy1+m)continue;ctx.drawImage(SHADOW,x+sox,y+soy,ss,ss);}
+  // shadow cast on the ground: one snake-shaped silhouette, offset and tapering at the tail
+  {let vis=false; const vs=Math.max(1,n>>6), mm=m+vs*s.spacing; for(let i=0;i<n;i+=vs){const x=WX[i],y=WY[i]; if(x>vx0-mm&&x<vx1+mm&&y>vy0-mm&&y<vy1+mm){vis=true;break;}}
+   if(!vis){const x=WX[n-1],y=WY[n-1]; if(x>vx0-mm&&x<vx1+mm&&y>vy0-mm&&y<vy1+mm) vis=true;}
+   if(!vis){ctx.globalAlpha=1;return;}
+   const sox=r*.22, soy=r*.34, st=Math.max(1,Math.floor(n/160)), tl=Math.max(4,Math.floor(n*.3)), cut=Math.max(1,n-tl);
+   ctx.lineCap='round'; ctx.lineJoin='round'; ctx.globalAlpha=baseA;
+   const seg=(a,b)=>{ctx.beginPath();ctx.moveTo(WX[a]+sox,WY[a]+soy);for(let i=a+st;i<b;i+=st)ctx.lineTo(WX[i]+sox,WY[i]+soy);ctx.lineTo(WX[b-1]+sox,WY[b-1]+soy);};
+   ctx.strokeStyle='rgba(0,0,0,.12)'; ctx.lineWidth=r*2.45; seg(0,cut); ctx.stroke();
+   ctx.strokeStyle='rgba(0,0,0,.2)'; ctx.lineWidth=r*1.8; seg(0,cut); ctx.stroke();
+   const mid=cut+Math.floor((n-cut)/2);
+   if(mid-cut>1){ctx.lineWidth=r*1.15; seg(cut-1,mid); ctx.stroke();}
+   if(n-mid>1){ctx.lineWidth=r*.6; seg(mid-1,n); ctx.stroke();}}
+  // far away (tiny on screen): draw a simple body instead of hundreds of scale sprites
+  if(r*K/DPR<2.6){
+    ctx.globalAlpha=baseA; ctx.strokeStyle=sk.base; ctx.lineWidth=r*2; ctx.lineCap='round'; ctx.lineJoin='round';
+    const st=Math.max(1,Math.floor(n/120)); ctx.beginPath(); ctx.moveTo(WX[0],WY[0]); for(let i=st;i<n;i+=st) ctx.lineTo(WX[i],WY[i]); ctx.lineTo(WX[n-1],WY[n-1]); ctx.stroke();
+    ctx.strokeStyle=sk.c2; ctx.lineWidth=r*.55; ctx.stroke(); ctx.globalAlpha=1; return;
+  }
   if(s.boosting||s.pu.turbo>0){
     ctx.globalCompositeOperation='lighter'; const gl=glow(sk.gc||sk.base),gs=r*3.8*(.9+.12*Math.sin(clock*22));
     ctx.globalAlpha=baseA*.45;
@@ -1413,9 +1444,12 @@ function drawSnake(s){
   }
   const hx=WX[0],hy=WY[0];
   if(hx>vx0-m&&hx<vx1+m&&hy>vy0-m&&hy<vy1+m){
-    const k2=Math.min(2,n-1); let tx=hx-WX[k2],ty=hy-WY[k2],tl=Math.hypot(tx,ty);
-    let c,sn; if(tl>1e-3){c=tx/tl;sn=ty/tl;const ca=Math.cos(s.ang),sa=Math.sin(s.ang);c=c*.65+ca*.35;sn=sn*.65+sa*.35;const l2=Math.hypot(c,sn)||1;c/=l2;sn/=l2;}else{c=Math.cos(s.ang);sn=Math.sin(s.ang);}
-    s.hang=Math.atan2(sn,c); s.hx=hx; s.hy=hy;
+    const k2=Math.min(2,n-1), tx=hx-WX[k2], ty=hy-WY[k2], tl=Math.hypot(tx,ty);
+    let ta=tl>1e-3?Math.atan2(ty,tx):s.ang;
+    if(!s.remote) ta+=angDiff(s.ang,ta)*.3;               // local snakes lean slightly into their steering
+    s.hangS=s.hangS===undefined?ta:s.hangS+angDiff(ta,s.hangS)*.35;
+    const c=Math.cos(s.hangS), sn=Math.sin(s.hangS);
+    s.hang=s.hangS; s.hx=hx; s.hy=hy;
     ctx.setTransform(K*c,K*sn,-K*sn,K*c,K*hx+OX,K*hy+OY); drawHead(s,r*.97);
   }
   ctx.setTransform(K,0,0,K,OX,OY); ctx.globalAlpha=1;
