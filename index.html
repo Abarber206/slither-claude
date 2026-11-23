@@ -391,34 +391,88 @@ const ground=(()=>{const S=256,c=mkc(S),g=c.getContext('2d');g.fillStyle='#3a2a1
   return ctx.createPattern(c,'repeat');})();
 // real grass: every spot of the meadow is a tuft of blades. Tufts are pre-drawn in 16 lean directions x 5 bend
 // amounts x 2 shades, so each frame just picks the tuft matching its wind + push and stamps it (fast drawImage).
-const GD=16, GM=5, GV=3, GPX=112, GSPR=[];
+const GD=16, GM=5, GV=4, GPX=128, GSPR=[];
+// four kinds of grass that blend across the meadow in big soft patches: deep, green, fresh, sun-dried
+const GPAL=[
+ {r:['#163c11','#1b4514','#204e18'], t:['#3c7628','#47832e','#528d34'], b:['#2c5a1e','#356623','#3c6e27'], hi:'#7fb85a', straw:.01},
+ {r:['#1f4416','#25501a','#2a591d'], t:['#5f9a3b','#6ca744','#79b24c'], b:['#456f2b','#4e7a31','#557f36'], hi:'#a6d77a', straw:.02},
+ {r:['#26501a','#2c5a1d','#326420'], t:['#79b44a','#88c053','#98cb5d'], b:['#5a8935','#64943b','#6d9d41'], hi:'#c4ec8e', straw:.025},
+ {r:['#34481a','#3e521d','#475c21'], t:['#93a650','#a5b35c','#b6be68'], b:['#73823c','#7e8c42','#889648'], hi:'#e0dc96', straw:.09},
+];
 (function buildGrass(){
+  const q=GPX/112, lit=(h,f)=>{const n=parseInt(h.slice(1),16);return 'rgb('+[n>>16&255,n>>8&255,n&255].map(v=>Math.round(v+(255-v)*f)).join(',')+')';};
   for(let v=0;v<GV;v++)for(let mi=0;mi<GM;mi++)for(let d=0;d<GD;d++){
-    const c=mkc(GPX),g=c.getContext('2d'),r=rng32(v*7919+1),ang=d/GD*TAU,mag=.12+mi*.21,o=GPX/2;
-    const roots=[['#1f4416','#25501a','#2a591d'],['#234a17','#2b561c','#30601f'],['#1c3e14','#224a18','#28541b']][v];
-    const tips=mi>=3?[['#456f2b','#4e7a31','#557f36'],['#4b7830','#558437','#5c8c3b'],['#3f6828','#48722e','#4f7a33']][v]:[['#5f9a3b','#6ca744','#79b24c'],['#69a641','#77b34a','#86bf53'],['#558d35','#62993d','#6ea545']][v];
-    const blades=[];
-    for(let k=0;k<26;k++){
-      const rad0=Math.sqrt(r())*22,th=ang+r()*TAU,bx=o+Math.cos(th)*rad0,by=o+Math.sin(th)*rad0,spread=(r()-.5)*(.5+(1-mag)*5.4),a=ang+spread,full=18+r()*26;
+    const c=mkc(GPX),g=c.getContext('2d'),r=rng32(v*7919+1),ang=d/GD*TAU,mag=.12+mi*.21,o=GPX/2, P=GPAL[v];
+    const tips=mi>=3?P.b:P.t, blades=[];
+    for(let k=0;k<30;k++){
+      const rad0=Math.sqrt(r())*22*q,th=ang+r()*TAU,bx=o+Math.cos(th)*rad0,by=o+Math.sin(th)*rad0,spread=(r()-.5)*(.5+(1-mag)*5.4),a=ang+spread,full=(16+r()*28)*q;
       const len=full*(.5+.5*mag),ca=Math.cos(a),sa=Math.sin(a),tx=bx+ca*len,ty=by+sa*len;
-      const curl=(r()-.5)*len*.45,mx=bx+ca*len*.5-sa*curl,my=by+sa*len*.5+ca*curl,w=.75+r()*.8,px=-sa*w,py=ca*w;
-      blades.push({bx,by,tx,ty,mx,my,px,py,k});
+      const curl=(r()-.5)*len*.45,mx=bx+ca*len*.5-sa*curl,my=by+sa*len*.5+ca*curl,w=(.55+r()*1.15)*q,px=-sa*w,py=ca*w;
+      blades.push({bx,by,tx,ty,mx,my,px,py,k,w,straw:r()<P.straw,seed:k<2&&v>=2&&mag<.6&&r()<.7,tone:r()});
     }
+    blades.sort((A,B)=>A.tone-B.tone);   // darker blades underneath, brighter ones on top
     const shape=(B,ox,oy,wm)=>{g.beginPath();g.moveTo(B.bx+B.px*wm,B.by+B.py*wm);g.quadraticCurveTo(B.mx+ox+B.px*.5*wm,B.my+oy+B.py*.5*wm,B.tx+ox,B.ty+oy);g.quadraticCurveTo(B.mx+ox-B.px*.5*wm,B.my+oy-B.py*.5*wm,B.bx-B.px*wm,B.by-B.py*wm);g.closePath();};
-    // shadows first: upright blades cast longer shadows than flattened ones
-    const sl=(1.25-mag*.75)*9;
-    try{g.filter='blur(1.6px)';}catch(e){}
+    const sl=(1.25-mag*.75)*9*q;
+    try{g.filter=`blur(${1.6*q}px)`;}catch(e){}
     g.fillStyle='rgba(6,10,4,.32)'; for(const B of blades){shape(B,sl,sl*1.2,1.6);g.fill();}
     try{g.filter='none';}catch(e){}
-    for(const B of blades){const gr=g.createLinearGradient(B.bx,B.by,B.tx,B.ty); gr.addColorStop(0,roots[B.k%3]); gr.addColorStop(1,tips[(B.k+mi)%3]); g.fillStyle=gr; shape(B,0,0,1); g.fill();}
+    for(const B of blades){
+      const gr=g.createLinearGradient(B.bx,B.by,B.tx,B.ty), tc=B.straw?(mi>=3?'#8a8a4a':'#adaa62'):tips[(B.k+mi)%3];
+      gr.addColorStop(0,B.straw?'#5b5a28':P.r[B.k%3]); gr.addColorStop(.7,tc); gr.addColorStop(1,B.straw?'#c8c47e':lit(tc,.18));
+      g.fillStyle=gr; shape(B,0,0,1); g.fill();
+      // a soft light vein down the wider blades
+      if(B.w>1.05*q){g.strokeStyle=B.straw?'rgba(255,245,200,.28)':'rgba(220,255,190,.2)'; g.lineWidth=.55*q; g.beginPath(); g.moveTo(B.bx,B.by); g.quadraticCurveTo(B.mx,B.my,B.bx+(B.tx-B.bx)*.92,B.by+(B.ty-B.by)*.92); g.stroke();}
+      // a few tufts carry little seed heads
+      if(B.seed){const ux=(B.tx-B.mx), uy=(B.ty-B.my), ul=Math.hypot(ux,uy)||1; g.fillStyle=v===3?'#d9c98a':'#b9c27a';
+        for(let s2=0;s2<5;s2++){const f=.55+s2*.12, sx=B.mx+ux*f, sy=B.my+uy*f, side=s2%2?1:-1; g.beginPath(); g.ellipse(sx-uy/ul*1.6*q*side,sy+ux/ul*1.6*q*side,2.2*q,1*q,Math.atan2(uy,ux)+side*.5,0,TAU); g.fill();}}
+    }
     GSPR[(v*GM+mi)*GD+d]=c;
   }
 })();
+// big soft colour patches across the whole meadow (same for everyone)
+const meadowTone=(x,y)=>clamp(.5+.22*Math.sin(x*.00071+y*.00043)+.18*Math.sin(-x*.00039+y*.00091+1.7)+.12*Math.sin(x*.0021-y*.0013+4.1)+.07*Math.sin(x*.0047+y*.0039+.6),0,1);
+const toneMap=(()=>{const N=256,c=mkc(N),g=c.getContext('2d'),im=g.createImageData(N,N),d=im.data;
+  const cols=[[44,98,32],[70,128,44],[100,150,56],[150,156,78]].map(x=>x);
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){const wx=-R+(x+.5)/N*2*R, wy=-R+(y+.5)/N*2*R, t=meadowTone(wx,wy)*3, i=Math.min(2,Math.floor(t)), f=t-i, p=(y*N+x)*4;
+    for(let k=0;k<3;k++) d[p+k]=cols[i][k]+(cols[i+1][k]-cols[i][k])*f; d[p+3]=255;}
+  g.putImageData(im,0,0); return c;})();
 const lawnPat=(()=>{const S=256,c=mkc(S),g=c.getContext('2d');g.fillStyle='#2a5419';g.fillRect(0,0,S,S);
-  const cols=['#2c5a1b','#356921','#3f7627','#4a852e','#579436','#64a23d'];
-  for(let k=0;k<5200;k++){const x=Math.random()*S,y=Math.random()*S,a=Math.random()*TAU,l=rnd(4,9),w=rnd(.6,1.2);g.strokeStyle=cols[Math.random()*6|0];g.lineWidth=w;g.lineCap='round';
-    for(const ox of [-S,0,S])for(const oy of [-S,0,S]){if(x+ox<-14||x+ox>S+14||y+oy<-14||y+oy>S+14)continue;g.beginPath();g.moveTo(x+ox,y+oy);g.lineTo(x+ox+Math.cos(a)*l,y+oy+Math.sin(a)*l);g.stroke();}}
+  const wrap=fn=>{for(const ox of [-S,0,S])for(const oy of [-S,0,S]){g.save();g.translate(ox,oy);fn();g.restore();}};
+  for(let k=0;k<60;k++){const x=Math.random()*S,y=Math.random()*S,r=rnd(14,40),lt=Math.random()<.5;wrap(()=>{const gr=g.createRadialGradient(x,y,0,x,y,r);gr.addColorStop(0,lt?'rgba(120,170,70,.22)':'rgba(10,30,8,.28)');gr.addColorStop(1,'rgba(0,0,0,0)');g.fillStyle=gr;g.fillRect(x-r,y-r,r*2,r*2);});}
+  const cols=['#22491a','#2c5a1b','#356921','#3f7627','#4a852e','#579436','#64a23d','#78b04a','#8a9a48'];
+  g.lineCap='round';
+  for(let k=0;k<6400;k++){const x=Math.random()*S,y=Math.random()*S,a=Math.random()*TAU,l=rnd(3.5,9),w=rnd(.5,1.2);g.strokeStyle=cols[Math.random()*cols.length|0];g.lineWidth=w;
+    for(const ox of [-S,0,S])for(const oy of [-S,0,S]){if(x+ox<-14||x+ox>S+14||y+oy<-14||y+oy>S+14)continue;g.beginPath();g.moveTo(x+ox,y+oy);g.quadraticCurveTo(x+ox+Math.cos(a)*l*.5+Math.sin(a)*1.2,y+oy+Math.sin(a)*l*.5-Math.cos(a)*1.2,x+ox+Math.cos(a)*l,y+oy+Math.sin(a)*l);g.stroke();}}
   return ctx.createPattern(c,'repeat');})();
+// wildflowers & clover, sprinkled on a fixed lattice (same for everyone)
+const FLSPR=(()=>{const out=[], S=64, o=S/2;
+  const mk=fn=>{const c=mkc(S),g=c.getContext('2d');g.translate(o,o);fn(g);out.push(c);};
+  const petals=(g,n,len,wd,col,edge,core,cr)=>{g.fillStyle='rgba(0,0,0,.25)';g.beginPath();g.arc(3,4,len*.95,0,TAU);g.fill();
+    for(let k=0;k<n;k++){g.save();g.rotate(k/n*TAU);const gr=g.createLinearGradient(0,0,len,0);gr.addColorStop(0,edge);gr.addColorStop(1,col);g.fillStyle=gr;g.beginPath();g.ellipse(len*.55,0,len*.5,wd,0,0,TAU);g.fill();g.restore();}
+    g.fillStyle=core;g.beginPath();g.arc(0,0,cr,0,TAU);g.fill();g.fillStyle='rgba(255,255,255,.35)';g.beginPath();g.arc(-cr*.3,-cr*.3,cr*.4,0,TAU);g.fill();};
+  mk(g=>petals(g,14,22,3.2,'#fbf8f0','#e8e2d4','#f2c230',6.5));                 // daisy
+  mk(g=>{g.fillStyle='rgba(0,0,0,.25)';g.beginPath();g.arc(3,4,20,0,TAU);g.fill(); for(let k=0;k<40;k++){const a=k*2.399,rr=Math.sqrt(k/40)*19;g.fillStyle=k%3?'#f4c21c':'#ffd84a';g.beginPath();g.ellipse(Math.cos(a)*rr,Math.sin(a)*rr,4,2,a,0,TAU);g.fill();} g.fillStyle='#e0a000';g.beginPath();g.arc(0,0,4,0,TAU);g.fill();}); // dandelion
+  mk(g=>{g.fillStyle='rgba(0,0,0,.22)';g.beginPath();g.arc(3,4,15,0,TAU);g.fill(); for(let k=0;k<34;k++){const a=k*2.399,rr=Math.sqrt(k/34)*14;g.fillStyle=k%2?'#c96aa0':'#e9a3c8';g.beginPath();g.ellipse(Math.cos(a)*rr,Math.sin(a)*rr,3.2,2,a,0,TAU);g.fill();}});   // clover blossom
+  mk(g=>petals(g,5,16,8,'#ffe35a','#f4c21c','#c98a10',4));                    // buttercup
+  mk(g=>{for(let k=0;k<3;k++){g.save();g.rotate(k/3*TAU-Math.PI/2);g.fillStyle='rgba(0,0,0,.2)';g.beginPath();g.ellipse(12,3,11,9,0,0,TAU);g.fill();
+      const gr=g.createRadialGradient(10,0,1,10,0,12);gr.addColorStop(0,'#7fbf55');gr.addColorStop(1,'#3e7a2a');g.fillStyle=gr;g.beginPath();g.ellipse(11,0,11,9,0,0,TAU);g.fill();
+      g.strokeStyle='rgba(225,245,210,.5)';g.lineWidth=1.2;g.beginPath();g.arc(9,0,5,-1.2,1.2);g.stroke();g.strokeStyle='rgba(20,50,15,.5)';g.lineWidth=.8;g.beginPath();g.moveTo(0,0);g.lineTo(20,0);g.stroke();g.restore();}}); // clover leaves
+  return out;})();
+function drawFlowers(){
+  const z=cam.z; if(24*z<4) return;
+  const FC=110, i0=Math.floor(vx0/FC)-1,i1=Math.ceil(vx1/FC)+1,j0=Math.floor(vy0/FC)-1,j1=Math.ceil(vy1/FC)+1, R2=(R-40)*(R-40);
+  const lawnish=gGrow*gGrow*(3-2*gGrow);
+  for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++){const h=GH(i,j,11); if(h>.2+.1*lawnish) continue;
+    const x=(i+GH(i,j,12))*FC, y=(j+GH(i,j,13))*FC; if(x*x+y*y>R2) continue;
+    const tone=meadowTone(x,y), h2=GH(i,j,14);
+    // dandelions & buttercups in sunnier patches, daisies and clover in the greener ones
+    const k=tone>.6?(h2<.45?1:h2<.75?3:4):(h2<.4?0:h2<.65?2:4);
+    let sz=(k===4?30:k===1?26:22)+GH(i,j,15)*8, a=1;
+    const sx=(W/2+(x-cam.x)*z)/WC+1+wShX, sy=(H/2+(y-cam.y)*z)/WC+1+wShY, gx=sx|0, gy=sy|0;
+    if(gx>0&&gy>0&&gx<gw-1&&gy<gh-1){const c=gy*gw+gx, f=Math.hypot(GBx[c],GBy[c]); if(f>.08){a=1-Math.min(.55,f*.7); sz*=1-Math.min(.25,f*.3);}}
+    ctx.globalAlpha=a; ctx.drawImage(FLSPR[k],x-sz/2,y-sz/2,sz,sz);}
+  ctx.globalAlpha=1;
+}
 const TS0=20;
 // tall-grass patches: the same for every player (fixed seed). Snakes inside are hidden from the minimap and covered by grass.
 const TGP=(()=>{const r=rng32(424242),a=[];for(let k=0;k<44;k++){const an=r()*TAU,d=Math.sqrt(r())*R*.88;a.push({x:Math.cos(an)*d,y:Math.sin(an)*d,r:260+r()*380,ph:r()*TAU,wob:.1+r()*.14});}return a;})();
@@ -445,7 +499,7 @@ function drawMeadow(){
   // big = thick grass over a green lawn, no dirt anywhere
   if(player&&!player.dead){const rr=player.rs||player.r; gGrow+=(clamp((rr-7)/26,0,1)-gGrow)*.03;}
   const gg=gGrow*gGrow*(3-2*gGrow), dens=.22+.78*gg, lawnA=Math.max(clamp((50-tpx)/24,0,1),clamp((gGrow-.3)/.55,0,1));
-  if(lawnA>0){ctx.globalAlpha=lawnA; ctx.fillStyle=lawnPat; ctx.fillRect(vx0,vy0,vx1-vx0,vy1-vy0); ctx.globalAlpha=1;}
+  if(lawnA>0){ctx.globalAlpha=lawnA; ctx.fillStyle=lawnPat; ctx.fillRect(vx0,vy0,vx1-vx0,vy1-vy0); ctx.globalAlpha=lawnA*.42; ctx.globalCompositeOperation='overlay'; ctx.drawImage(toneMap,-R,-R,2*R,2*R); ctx.globalCompositeOperation='source-over'; ctx.globalAlpha=1;}
   if(lawnA<.98){ctx.fillStyle=lawnPat;
     for(const p of TGP){ if(p.x+p.r*1.2<vx0||p.x-p.r*1.2>vx1||p.y+p.r*1.2<vy0||p.y-p.r*1.2>vy1) continue;
       for(const [shr,al] of [[30,.85]]){ctx.globalAlpha=al*(1-lawnA); ctx.beginPath();
@@ -469,7 +523,7 @@ function drawMeadow(){
     const sx=(W/2+(x-cam.x)*z)/WC+1+wShX, sy=(H/2+(y-cam.y)*z)/WC+1+wShY, gx=sx|0, gy=sy|0;
     let fx=0,fy=0,fm=0;
     if(gx>0&&gy>0&&gx<gw-1&&gy<gh-1){const c=gy*gw+gx; fx=GBx[c]; fy=GBy[c]; fm=Math.hypot(fx,fy);}
-    const sz=sz0, vrow=(h1*3|0)*GM; let siR=-1,siP=-1;
+    const sz=sz0, vrow=clamp(Math.floor(meadowTone(x,y)*4+(h1-.5)*1.3),0,3)*GM; let siR=-1,siP=-1;
     let pw=clamp((fm-.06)/.22,0,1); pw=pw*pw*(3-2*pw);
     // each tuft keeps ONE fixed pose; perspective and wind only bend it smoothly (no popping between poses)
     const bmS=(gx>0&&gy>0&&gx<gw-1&&gy<gh-1)?BMS[gy*gw+gx]:0;
@@ -481,6 +535,7 @@ function drawMeadow(){
   }
   ctx.globalAlpha=1; ctx.setTransform(K,0,0,K,OX,OY);
   }
+  drawFlowers();
   drawScrapes();
   // pressed-down groove over the blades: flattened grass reads darker until it springs back
   {const d=wimg.data, B=gFB, P0=gFBp||[0,0,gw-1,gh-1];
@@ -758,8 +813,8 @@ function collide(s){
     const o=bO[j]; if(o===s.slot) continue;
     const os=snakes[o], lim=rr+os.r*.82,dx=bX[j]-s.x,dy=bY[j]-s.y;
     if(dx*dx+dy*dy<lim*lim){
-      // head-on: if we hit the other snake's HEAD and we're bigger, we win (they die on their own check)
-      if(bI[j]<Math.max(3,Math.ceil(os.r*1.6/os.spacing))&&s.mass>os.mass) continue;
+      // head-on: hitting a smaller snake's HEAD eliminates it, and we survive
+      if(bI[j]<Math.max(3,Math.ceil(os.r*1.6/os.spacing))&&s.mass>os.mass) return -10-o;
       return o;}
   }
   return -2;
@@ -863,7 +918,9 @@ function step(dt){
       if(dx*dx+dy*dy<lim*lim){if(!s.remote)s.pu[u.type]=PU_DUR[u.type]; if(s.player) onPU(u.type); else if(inView(u.x,u.y)) burst(u.x,u.y,PU_COL[u.type],12,160,.7); if(world==='water'){ripple(u.x,u.y,60,1.5);ripple(u.x,u.y,40,5,hA);}else trample(u.x,u.y,70,0,0,1,10); pus.splice(i,1); break;}}}
   buildBodyGrid();
   const dying=[];
-  for(const s of snakes){ if(s.dead||s.remote) continue; const k=collide(s); if(k!==-2) dying.push([s,k]); }
+  for(const s of snakes){ if(s.dead||s.remote) continue; const k=collide(s);
+    if(k<=-10){const v=snakes[-10-k]; if(v&&!v.dead&&!v.remote) dying.push([v,s.slot]);}
+    else if(k!==-2) dying.push([s,k]); }
   for(const [s,k] of dying) kill(s,k);
   updatePellets(dt); updateCritters(dt); updatePads(dt); updateScrapes();
   if(worldRole!=='follower'||pendingSwap){
