@@ -655,6 +655,7 @@ function bodySprites(sk){
         const sh=lum*diff*(1-.72*rim)*ek, sp=255*spec*(.55+.45*lum);
         d[p]=Math.min(255,col[0]*sh+sp); d[p+1]=Math.min(255,col[1]*sh+sp); d[p+2]=Math.min(255,col[2]*sh+sp); d[p+3]=al;}}
     g.putImageData(im,0,0); out.push(c);}
+  const A=mkc(C*(BSW+2),BSH), ag=A.getContext('2d'); for(let k=0;k<C;k++) ag.drawImage(out[k],k*(BSW+2)+1,0); sk.batl=A;
   sk.bspr=out; return out;
 }
 function warmSkins(){ for(const s of snakes){ if(!s.dead&&s.skin&&!s.skin.bspr){ bodySprites(s.skin); return; } } }
@@ -1943,10 +1944,10 @@ function drawPUIcon(u,s){
     ctx.globalAlpha=1;ctx.fillStyle='#2a2140';ctx.beginPath();ctx.arc(-s*.13,-s*.08,s*.07,0,TAU);ctx.arc(s*.13,-s*.08,s*.07,0,TAU);ctx.fill();}
   ctx.restore();
 }
-function drawHead(s,hr){
+function drawHeadFull(s,hr,stat){
   const sk=s.skin;
   const tp=(clock+s.uid*1.37)%3.1;
-  if(tp<.42){const ext=Math.sin(tp/.42*Math.PI)*hr*1.2,x0=hr*1.35,f=hr*.3;
+  if(!stat&&tp<.42){const ext=Math.sin(tp/.42*Math.PI)*hr*1.2,x0=hr*1.35,f=hr*.3;
     ctx.strokeStyle='#C2334A';ctx.lineWidth=Math.max(.8,hr*.075);ctx.lineCap='round';ctx.beginPath();
     ctx.moveTo(x0,0);ctx.lineTo(x0+ext,0);ctx.lineTo(x0+ext+f,-f*.5);ctx.moveTo(x0+ext,0);ctx.lineTo(x0+ext+f,f*.5);ctx.stroke();}
   // skull outline: broad jaw, rounded snout, soft neck
@@ -2002,10 +2003,10 @@ function drawHead(s,hr){
     const ig=ctx.createRadialGradient(ex-er*.25,ey-side*er*.1,er*.1,ex,ey,er);
     ig.addColorStop(0,mix(sk.eye,'w',.45));ig.addColorStop(.55,sk.eye);ig.addColorStop(1,mix(sk.eye,'b',.5));
     ctx.fillStyle=ig;ctx.beginPath();ctx.arc(ex,ey,er,0,TAU);ctx.fill();
-    const px=ex+Math.cos(la)*er*.3,py=ey+Math.sin(la)*er*.3;
+    if(!stat){const px=ex+Math.cos(la)*er*.3,py=ey+Math.sin(la)*er*.3;
     ctx.fillStyle='#070605';ctx.beginPath();ctx.ellipse(px,py,er*.78,er*.17,0,0,TAU);ctx.fill();
     ctx.fillStyle='rgba(255,255,255,.95)';ctx.beginPath();ctx.arc(ex+er*.25,ey-er*.38,er*.2,0,TAU);ctx.fill();
-    ctx.fillStyle='rgba(255,255,255,.5)';ctx.beginPath();ctx.arc(ex-er*.35,ey+er*.3,er*.09,0,TAU);ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.5)';ctx.beginPath();ctx.arc(ex-er*.35,ey+er*.3,er*.09,0,TAU);ctx.fill();}
     // supraocular brow overhanging the inner edge
     ctx.save();ctx.beginPath();ctx.arc(ex,ey,er*1.02,0,TAU);ctx.clip();
     ctx.fillStyle='rgba(0,0,0,.38)';ctx.beginPath();ctx.ellipse(ex,ey-side*er*1.05,er*1.3,er*.5,0,0,TAU);ctx.fill();ctx.restore();
@@ -2014,7 +2015,25 @@ function drawHead(s,hr){
   // nostrils
   ctx.fillStyle='rgba(0,0,0,.65)';
   for(const side of [-1,1]){ctx.beginPath();ctx.ellipse(hr*1.24,side*hr*.17,hr*.07,hr*.04,side*.5,0,TAU);ctx.fill();}
-  if(sk.acc) drawAccessory(sk.acc,hr);
+  if(sk.acc&&(!stat||sk.acc!=='sparkle')) drawAccessory(sk.acc,hr);
+}
+const HR0=64, HC0=108, HS0=216;
+function drawHead(s,hr){
+  const sk=s.skin; let hc=sk.hspr;
+  if(!hc){ hc=sk.hspr=mkc(HS0); const saved=ctx; ctx=hc.getContext('2d'); ctx.translate(HC0,HC0);
+    try{ drawHeadFull({skin:sk,uid:0,look:0,ang:0,hang:0},HR0,true); } finally{ ctx=saved; } }
+  const k=hr/HR0; ctx.drawImage(hc,-HC0*k,-HC0*k,HS0*k,HS0*k);
+  // live bits: tongue flick, pupils that follow where you steer, eye shine, spinning sparkle
+  const tp=(clock+s.uid*1.37)%3.1;
+  if(tp<.42){const ext=Math.sin(tp/.42*Math.PI)*hr*1.2,x0=hr*1.35,f=hr*.3;
+    ctx.strokeStyle='#C2334A';ctx.lineWidth=Math.max(.8,hr*.075);ctx.lineCap='round';ctx.beginPath();
+    ctx.moveTo(x0,0);ctx.lineTo(x0+ext,0);ctx.lineTo(x0+ext+f,-f*.5);ctx.moveTo(x0+ext,0);ctx.lineTo(x0+ext+f,f*.5);ctx.stroke();}
+  const la=angDiff(s.look,s.hang===undefined?s.ang:s.hang), er=hr*.24, ex=hr*.5;
+  ctx.fillStyle='#070605'; ctx.beginPath();
+  for(const side of [-1,1]){const ey=side*hr*.64, px=ex+Math.cos(la)*er*.3, py=ey+Math.sin(la)*er*.3; ctx.moveTo(px+er*.78,py); ctx.ellipse(px,py,er*.78,er*.17,0,0,TAU);} ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,.95)'; ctx.beginPath();
+  for(const side of [-1,1]){const ey=side*hr*.64; ctx.moveTo(ex+er*.45,ey-er*.38); ctx.arc(ex+er*.25,ey-er*.38,er*.2,0,TAU);} ctx.fill();
+  if(sk.acc==='sparkle') drawAccessory('sparkle',hr);
 }
 function drawAccessory(a,hr){
   ctx.save(); ctx.lineJoin='round'; ctx.lineCap='round';
@@ -2084,7 +2103,7 @@ function drawSnake(s,aMul,noShadow){
       const lx=c*sox+sn*soy, ly=-sn*sox+c*soy, ss=rr*2.9;
       ctx.globalAlpha=baseA*.5*lv; ctx.drawImage(SHADOW,lx-ss/2,ly-ss/2,ss,ss);
       rr*=1+.09*lv; ctx.globalAlpha=baseA*lv; ctx.fillStyle=rimC; ctx.fillRect(-sw/2,-rr-ext,sw,(rr+ext)*2); ctx.globalAlpha=baseA;}
-    ctx.drawImage(bspr[i%KB],-sw/2,-rr,sw,rr*2);
+    ctx.drawImage(sk.batl,(i%KB)*(BSW+2)+1,0,BSW,BSH,-sw/2,-rr,sw,rr*2);
   }
   const hx=WX[0],hy=WY[0];
   if(hx>vx0-m&&hx<vx1+m&&hy>vy0-m&&hy<vy1+m){
@@ -2124,11 +2143,11 @@ function render(){
   dayNight(); drawNightGround();
   // pellets
   ctx.globalCompositeOperation='lighter';
-  for(const p of pellets){
-    if(p.x<vx0||p.x>vx1||p.y<vy0||p.y>vy1) continue;
-    const s=p.r*6*(1+.16*Math.sin(clock*3+p.ph))*(1+.45*NIGHT); ctx.globalAlpha=(!p.nat&&p.life<3)?p.life/3:1;
-    ctx.drawImage(glow(p.col),p.x-s/2,p.y-s/2,s,s);
-  }
+  {const byCol=new Map();
+   for(const p of pellets){ if(p.x<vx0||p.x>vx1||p.y<vy0||p.y>vy1) continue; let L=byCol.get(p.col); if(!L){L=[];byCol.set(p.col,L);} L.push(p); }
+   const nb=1+.45*NIGHT;
+   for(const [col,L] of byCol){ const img=glow(col);
+     for(const p of L){ const s=p.r*6*(1+.16*Math.sin(clock*3+p.ph))*nb, a=(!p.nat&&p.life<3)?p.life/3:1; if(ctx.globalAlpha!==a) ctx.globalAlpha=a; ctx.drawImage(img,p.x-s/2,p.y-s/2,s,s); } }}
   ctx.globalAlpha=1;
   for(const u of pus){ if(u.x<vx0-60||u.x>vx1+60||u.y<vy0-60||u.y>vy1+60) continue; const s=90*(1+.12*Math.sin(clock*4+u.ph)); ctx.drawImage(glow(PU_COL[u.type]),u.x-s/2,u.y-s/2,s,s); }
   ctx.globalCompositeOperation='source-over';
