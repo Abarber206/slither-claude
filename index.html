@@ -479,6 +479,8 @@ function drawFlowers(){
   ctx.globalAlpha=1;
 }
 const TS0=20;
+// Firefox paints this canvas mostly on the CPU: give it a lighter grass budget (Chrome/Edge keep the full meadow)
+const IS_FF=/firefox/i.test(navigator.userAgent), GBUD=IS_FF?2200:4600;
 // tall-grass patches: the same for every player (fixed seed). Snakes inside are hidden from the minimap and covered by grass.
 const TGP=(()=>{const r=rng32(424242),a=[];for(let k=0;k<44;k++){const an=r()*TAU,d=Math.sqrt(r())*R*.88;a.push({x:Math.cos(an)*d,y:Math.sin(an)*d,r:260+r()*380,ph:r()*TAU,wob:.1+r()*.14});}return a;})();
 const TGC=100, TGN=Math.ceil(2*R/TGC)+2, TGW=new Float32Array(TGN*TGN);
@@ -490,7 +492,7 @@ function tallAt(x,y){ if(world!=='meadow') return 0; const gx=((x+R)/TGC)|0, gy=
 let grassQ=1, fpsAcc=0, fpsN=0, gGrow=0;
 function tuneGrass(dt){ // keep frame rate smooth on slower devices by thinning grass a little
   fpsAcc+=dt; fpsN++; if(fpsAcc<2) return; const avg=fpsAcc/fpsN*1000; fpsAcc=0; fpsN=0;
-  if(avg>21&&grassQ>.35) grassQ=Math.max(.35,grassQ*.82); else if(avg<14&&grassQ<1) grassQ=Math.min(1,grassQ*1.12);
+  if(avg>21&&grassQ>(IS_FF?.25:.35)) grassQ=Math.max(IS_FF?.25:.35,grassQ*.82); else if(avg<14&&grassQ<1) grassQ=Math.min(1,grassQ*1.12);
 }
 // draw a tuft leaning by (lx,ly): the base stays put and the tips stretch toward the lean. Axis-aligned, so it stays fast.
 function tuftAt(k,x,y,sz,lx,ly){ const w=sz+Math.abs(lx), h=sz+Math.abs(ly); ctx.drawImage(GATLAS,(k%GD)*GCELL+2,((k/GD)|0)*GCELL+2,GPX,GPX,x+lx*.5-w/2,y+ly*.5-h/2,w,h); }
@@ -511,7 +513,7 @@ function drawMeadow(){
         for(let q=0;q<=40;q++){const an=q/40*TAU, rr=tgRad(p,an)-shr; q?ctx.lineTo(p.x+Math.cos(an)*rr,p.y+Math.sin(an)*rr):ctx.moveTo(p.x+Math.cos(an)*rr,p.y+Math.sin(an)*rr);} ctx.fill();}}
     ctx.globalAlpha=1;}
   const tuftA=clamp((tpx-15)/14,0,1);
-  const target=Math.max(10,Math.sqrt(W*H/(4600*grassQ))), keep=Math.min(1,(S*z/target)**2);
+  const target=Math.max(10,Math.sqrt(W*H/(GBUD*grassQ))), keep=Math.min(1,(S*z/target)**2);
   if(tuftA>0){
   const LV=Math.max(0,Math.min(6,Math.floor(Math.log(1/Math.max(keep,1e-4))/Math.log(4)))), ST=1<<LV, pad2=pad+S*3.5;
   const i0=Math.floor((vx0-pad2)/S/ST)*ST,i1=Math.ceil((vx1+pad2)/S),j0=Math.floor((vy0-pad2)/S/ST)*ST,j1=Math.ceil((vy1+pad2)/S);
@@ -571,7 +573,7 @@ function waterRender(){
   wctx.putImageData(wimg,0,0);
 }
 
-let RS=1;   // render scale: drops automatically when frames get slow, recovers when there's headroom
+let RS=IS_FF?.8:1;   // render scale: drops automatically when frames get slow, recovers when there's headroom
 function resize(){DPR=Math.min(2,window.devicePixelRatio||1)*RS;W=innerWidth;H=innerHeight;cvs.width=Math.round(W*DPR);cvs.height=Math.round(H*DPR);mini.width=mini.height=Math.round((W<=520?124:150)*Math.min(2,window.devicePixelRatio||1));initWater();}
 function setRes(rs){RS=rs; DPR=Math.min(2,window.devicePixelRatio||1)*RS; cvs.width=Math.round(W*DPR); cvs.height=Math.round(H*DPR);}
 let resAcc=0,resN=0,resCool=0;
