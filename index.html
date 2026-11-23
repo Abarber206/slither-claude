@@ -429,6 +429,10 @@ const GPAL=[
     GSPR[(v*GM+mi)*GD+d]=c;
   }
 })();
+// pack every tuft into one atlas texture so the GPU never switches images while drawing grass
+const GCELL=GPX+4, GATLAS=(()=>{const c=mkc(GD*GCELL,GV*GM*GCELL),g=c.getContext('2d');
+  for(let k=0;k<GSPR.length;k++){const col=k%GD,row=(k/GD)|0; g.drawImage(GSPR[k],col*GCELL+2,row*GCELL+2);} return c;})();
+GSPR.length=0;
 // big soft colour patches across the whole meadow (same for everyone)
 const meadowTone=(x,y)=>clamp(.5+.22*Math.sin(x*.00071+y*.00043)+.18*Math.sin(-x*.00039+y*.00091+1.7)+.12*Math.sin(x*.0021-y*.0013+4.1)+.07*Math.sin(x*.0047+y*.0039+.6),0,1);
 const toneMap=(()=>{const N=256,c=mkc(N),g=c.getContext('2d'),im=g.createImageData(N,N),d=im.data;
@@ -488,7 +492,7 @@ function tuneGrass(dt){ // keep frame rate smooth on slower devices by thinning 
   if(avg>21&&grassQ>.35) grassQ=Math.max(.35,grassQ*.82); else if(avg<14&&grassQ<1) grassQ=Math.min(1,grassQ*1.12);
 }
 // draw a tuft leaning by (lx,ly): the base stays put and the tips stretch toward the lean. Axis-aligned, so it stays fast.
-function tuftAt(img,x,y,sz,lx,ly){ const w=sz+Math.abs(lx), h=sz+Math.abs(ly); ctx.drawImage(img,x+lx*.5-w/2,y+ly*.5-h/2,w,h); }
+function tuftAt(k,x,y,sz,lx,ly){ const w=sz+Math.abs(lx), h=sz+Math.abs(ly); ctx.drawImage(GATLAS,(k%GD)*GCELL+2,((k/GD)|0)*GCELL+2,GPX,GPX,x+lx*.5-w/2,y+ly*.5-h/2,w,h); }
 function drawMeadow(){
   const z=cam.z;
   ctx.fillStyle=ground; ctx.fillRect(vx0,vy0,vx1-vx0,vy1-vy0);
@@ -527,10 +531,10 @@ function drawMeadow(){
     let pw=clamp((fm-.06)/.22,0,1); pw=pw*pw*(3-2*pw);
     // each tuft keeps ONE fixed pose; perspective and wind only bend it smoothly (no popping between poses)
     const bmS=(gx>0&&gy>0&&gx<gw-1&&gy<gh-1)?BMS[gy*gw+gx]:0;
-    if(pw<1){siR=(vrow+(h2>.72?1:0))*GD+((GH(i,j,6)*GD)|0); ctx.globalAlpha=fa*(1-pw); tuftAt(GSPR[siR],x,y,sz,lx,ly);
+    if(pw<1){siR=(vrow+(h2>.72?1:0))*GD+((GH(i,j,6)*GD)|0); ctx.globalAlpha=fa*(1-pw); tuftAt(siR,x,y,sz,lx,ly);
       if(tw<.25&&bmS>.08&&bmS<.64){const e=Math.min(1,(bmS-.08)/.14)*Math.min(1,(.64-bmS)/.12); GOV.push(siR,x,y,sz,fa*(1-pw)*e*.5,lx,ly,0);}}
     if(pw>0){const mi=fm<.43?1:fm<.64?2:fm<.85?3:4, A=Math.atan2(fy,fx)*DQ; let di=Math.round(A); di=((di%GD)+GD)%GD;
-      siP=(vrow+mi)*GD+di; ctx.globalAlpha=fa*pw; tuftAt(GSPR[siP],x,y,sz,0,0);}
+      siP=(vrow+mi)*GD+di; ctx.globalAlpha=fa*pw; tuftAt(siP,x,y,sz,0,0);}
     if(tw>.25&&bmS>.01){const useP=pw>.5&&siP>=0; TOV.push(useP?siP:siR,x,y,sz,fa*clamp((tw-.25)/.35,0,1)*.93,useP?0:lx,useP?0:ly,0);}
   }
   ctx.globalAlpha=1; ctx.setTransform(K,0,0,K,OX,OY);
@@ -566,7 +570,12 @@ function waterRender(){
   wctx.putImageData(wimg,0,0);
 }
 
-function resize(){DPR=Math.min(2,window.devicePixelRatio||1);W=innerWidth;H=innerHeight;cvs.width=Math.round(W*DPR);cvs.height=Math.round(H*DPR);mini.width=mini.height=Math.round((W<=520?124:150)*DPR);initWater();}
+let RS=1;   // render scale: drops automatically when frames get slow, recovers when there's headroom
+function resize(){DPR=Math.min(2,window.devicePixelRatio||1)*RS;W=innerWidth;H=innerHeight;cvs.width=Math.round(W*DPR);cvs.height=Math.round(H*DPR);mini.width=mini.height=Math.round((W<=520?124:150)*Math.min(2,window.devicePixelRatio||1));initWater();}
+function setRes(rs){RS=rs; DPR=Math.min(2,window.devicePixelRatio||1)*RS; cvs.width=Math.round(W*DPR); cvs.height=Math.round(H*DPR);}
+let resAcc=0,resN=0,resCool=0;
+function tuneRes(dt){ if(document.hidden) return; resAcc+=dt; resN++; resCool-=dt; if(resAcc<1.2) return; const avg=resAcc/resN*1000; resAcc=0; resN=0; if(resCool>0) return;
+  if(avg>20&&RS>.5){setRes(Math.max(.5,RS*.82)); resCool=1.5;} else if(avg<10.5&&RS<1){setRes(Math.min(1,RS*1.12)); resCool=4;} }
 addEventListener('resize',resize);
 
 /* ---------- sprites ---------- */
@@ -2143,13 +2152,13 @@ function render(){
     const H=[]; for(const s of snakes){if(s.dead) continue; const hx=s.hx===undefined?s.x:s.hx, hy=s.hy===undefined?s.y:s.hy; if(hx<vx0-200||hx>vx1+200||hy<vy0-200||hy>vy1+200) continue; H.push(hx,hy,(s.rs||s.r)*1.2+10);}
     for(let k=0;k<GOV.length;k+=8){const cx=GOV[k+1], cy=GOV[k+2]; let a=GOV[k+4];
       for(let q=0;q<H.length&&a>0;q+=3){const d=Math.hypot(cx-H[q],cy-H[q+1]), r0=H[q+2]; if(d<r0+20) a*=clamp((d-r0)/20,0,1);}
-      if(a<.02) continue; ctx.globalAlpha=a; tuftAt(GSPR[GOV[k]],cx,cy,GOV[k+3],GOV[k+5],GOV[k+6]);}
+      if(a<.02) continue; ctx.globalAlpha=a; tuftAt(GOV[k],cx,cy,GOV[k+3],GOV[k+5],GOV[k+6]);}
     ctx.globalAlpha=1;}
   if(world==='meadow'&&TOV.length){ctx.setTransform(K,0,0,K,OX,OY);
     const me=state==='replay'?null:(player&&!player.dead?player:null), mx=me?(me.hx===undefined?me.x:me.hx):0, my=me?(me.hy===undefined?me.y:me.hy):0, mr=me?(me.rs||me.r)*1.3+14:0;
     for(let k=0;k<TOV.length;k+=8){let a=TOV[k+4];
       if(me){const d=Math.hypot(TOV[k+1]-mx,TOV[k+2]-my); if(d<mr+30) a*=.25+.75*clamp((d-mr)/30,0,1);}
-      ctx.globalAlpha=a; tuftAt(GSPR[TOV[k]],TOV[k+1],TOV[k+2],TOV[k+3],TOV[k+5],TOV[k+6]);}
+      ctx.globalAlpha=a; tuftAt(TOV[k],TOV[k+1],TOV[k+2],TOV[k+3],TOV[k+5],TOV[k+6]);}
     ctx.globalAlpha=1;}
   if(nightOv){ ctx.setTransform(1,0,0,1,0,0); ctx.globalCompositeOperation='source-atop'; ctx.fillStyle=`rgba(6,12,32,${.58*NIGHT})`; ctx.fillRect(0,0,ovc.width,ovc.height); ctx.globalCompositeOperation='source-over';
     ctx=mainCtx; ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(ovc,0,0); ctx.setTransform(K,0,0,K,OX,OY); }
@@ -2344,7 +2353,7 @@ $('tomenu').addEventListener('click',()=>{state='menu';overEl.classList.add('hid
 const fpsEl=$('fps'); let showFps=store.get('slc_fps','0')==='1', fpsN2=0, fpsT2=0, fpsWorst=0;
 function setFps(on){showFps=on; store.set('slc_fps',on?'1':'0'); fpsEl.classList.toggle('hidden',!on); $('fpsTog').textContent='FPS counter: '+(on?'On':'Off');}
 function fpsTick(dt){ if(!showFps) return; fpsN2++; fpsT2+=dt; fpsWorst=Math.max(fpsWorst,dt);
-  if(fpsT2>=.5){fpsEl.textContent=`${Math.round(fpsN2/fpsT2)} fps · worst ${Math.round(fpsWorst*1000)} ms`+(world==='meadow'?` · grass ${Math.round(grassQ*100)}%`:''); fpsN2=0; fpsT2=0; fpsWorst=0;} }
+  if(fpsT2>=.5){fpsEl.textContent=`${Math.round(fpsN2/fpsT2)} fps · worst ${Math.round(fpsWorst*1000)} ms`+(world==='meadow'?` · grass ${Math.round(grassQ*100)}%`:'')+(RS<1?` · res ${Math.round(RS*100)}%`:''); fpsN2=0; fpsT2=0; fpsWorst=0;} }
 addEventListener('keydown',e=>{ if(e.target&&e.target.tagName==='INPUT') return; if(e.key==='f'||e.key==='F') setFps(!showFps); });
 $('fpsTog').addEventListener('click',()=>setFps(!showFps));
 setFps(showFps);
@@ -2426,7 +2435,7 @@ function frame(t){
     if(lastRp) startReplay(lastRp); else showOver();
   }
   shake*=Math.exp(-dt*9); if(shake<.2) shake=0;
-  warmSkins(); fpsTick(dt); boostAudio(); rustleAudio(); netSend(false); worldSend(); if(world==='meadow') tuneGrass(dt); render();
+  warmSkins(); tuneRes(dt); fpsTick(dt); boostAudio(); rustleAudio(); netSend(false); worldSend(); if(world==='meadow') tuneGrass(dt); render();
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
