@@ -206,6 +206,19 @@ function makeCustom(c){return {n:'Custom',base:c.b,pat:c.p,c2:c.c2,c3:c.c3,cyc:c
 function validCfg(c){return c&&typeof c==='object'&&HEX.test(c.b)&&HEX.test(c.c2)&&HEX.test(c.c3)&&HEX.test(c.e)&&PATS.includes(c.p)&&ACCS.includes(c.a)&&Number.isFinite(c.cy)&&c.cy>=4&&c.cy<=16;}
 const remoteSkinCache=new Map();
 function skinFromCfg(c){const key=JSON.stringify([c.b,c.p,c.c2,c.c3,c.e,c.cy|0,c.a]);let sk=remoteSkinCache.get(key);if(!sk){sk=makeCustom({b:c.b,p:c.p,c2:c.c2,c3:c.c3,e:c.e,cy:c.cy|0,a:c.a});remoteSkinCache.set(key,sk);}return sk;}
+function rng32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function hslHex(h,s2,l){const f=n=>{const k=(n+h*12)%12,a=s2*Math.min(l,1-l);return Math.round(255*(l-a*Math.max(-1,Math.min(k-3,9-k,1))));};return '#'+[f(0),f(8),f(4)].map(v=>v.toString(16).padStart(2,'0')).join('');}
+const OPUS_SKIN={n:'Opus',base:'#D97757',pat:'bands',c2:'#F3EBDD',c3:'#E8A55A',cyc:9,eye:'#F3C969',gc:'#F3EBDD',acc:'sparkle'};
+// same seed -> same look on every device, so host-run bots need no extra network data
+function botSkin(seed){
+  const r=rng32(Math.imul(seed|0,2654435761)^0x5bd1e995);
+  if(r()<.28) return SKINS[Math.floor(r()*SKINS.length)];
+  const h=r(), dark=r()<.5, base=hslHex(h,.28+r()*.4,dark?.22+r()*.18:.42+r()*.22);
+  const h2=(h+(r()<.5?.5:r()*.25-.125)+1)%1, c2=hslHex(h2,.3+r()*.6,dark?.55+r()*.3:.12+r()*.25);
+  const c3=hslHex(r(),.2+r()*.4,.7+r()*.22);
+  const pats=['solid','bands','rings','diamond','zigzag','stripe','saddle','spots','coral'], accs=['','','','','','','crown','horns','bow','sparkle'];
+  return skinFromCfg({b:base,p:pats[Math.floor(r()*pats.length)],c2,c3,e:['#F3C969','#E8A55A','#D04848','#8AB4D8','#F3EBDD','#9DB17C'][Math.floor(r()*6)],cy:4+Math.floor(r()*12),a:accs[Math.floor(r()*accs.length)]||'none'});
+}
 const NAMES=['Opus','Sonnet','Haiku','Tokenizer','Context Window','Hallucination','Gradient','Backprop','Attention Head','Temperature 2.0','Stop Sequence','System Prompt','Embedding','Overfit','Big O','Null Pointer','Segfault','Recursion','Chain of Thought','Latent Space','Dropout','Softmax','Kernel Panic','Semicolon','Rubber Duck','Merge Conflict','Off By One','Lorem Ipsum','Async Await','Prompt Injection','Fine Tune','Beam Search','Token Budget','Vector DB','Batch Norm','Learning Rate','Epoch','Perplexity','Cache Miss','Race Condition','Heap Overflow','Hotfix','Regex','Deadlock','Tensor','Few Shot','Zero Shot','Stack Trace'];
 const PERS=['hunter','grazer','coward','wanderer','grazer','hunter','grazer'];
 const PU_DUR={magnet:9,turbo:6,ghost:6};
@@ -497,7 +510,8 @@ function newBot(initial){
   let mass=initial?10+Math.pow(Math.random(),3.4)*14000:10+Math.pow(Math.random(),4)*1500;
   if(name==='Opus'&&initial) mass=Math.max(mass,32000);
   if((name==='Sonnet'||name==='Haiku')&&initial) mass=Math.max(mass,name==='Sonnet'?16000:9000);
-  return newSnake({name,skin:pick(SKINS),mass,pers:name==='Opus'?'hunter':pick(PERS),skill:name==='Opus'?1:rnd(.35,1)});
+  const b=newSnake({name,skin:SKINS[0],mass,pers:name==='Opus'?'hunter':pick(PERS),skill:name==='Opus'?1:rnd(.35,1)});
+  b.skin=name==='Opus'?OPUS_SKIN:botSkin(b.uid); return b;
 }
 
 /* ---------- pellets & power-ups ---------- */
@@ -666,11 +680,11 @@ function step(dt){
   for(const s of snakes){ if(s.dead||s.remote) continue; const k=collide(s); if(k!==-2) dying.push([s,k]); }
   for(const [s,k] of dying) kill(s,k);
   updatePellets(dt);
-  if(worldRole!=='follower'){
+  if(worldRole!=='follower'||pendingSwap){
     let bots=0; for(const s of snakes) if(!s.player&&!s.remote&&!s.gone) bots++;
     for(let i=0;i<snakes.length;i++){const s=snakes[i];
       if(s.dead&&!s.player&&!s.remote&&!s.gone&&clock>s.respawnAt){ if(bots>targetBots){s.gone=true;bots--;} else snakes[i]=newBot(false); }}
-    if(bots<targetBots&&Math.random()<.02) snakes.push(newBot(false));
+    if(bots<targetBots&&Math.random()<(bots<targetBots*.6?.25:.02)) snakes.push(newBot(false));
   }
   if(snakes.some(s=>s.gone)){snakes=snakes.filter(s=>!s.gone);for(let i=0;i<snakes.length;i++)snakes[i].slot=i;buildBodyGrid();}
   while(pus.length<NPU) spawnPU();
@@ -907,6 +921,7 @@ function onPeersChange(ch){
 const num=(v,lo,hi)=>typeof v==='number'&&isFinite(v)?clamp(v,lo,hi):null;
 function onRemote(peer){
   const w=peer.presence&&peer.presence.w;
+  if(w&&typeof w==='object'&&Array.isArray(w.b)) worldSeenFrom.set(peer.peer,performance.now());
   if(w&&worldRole==='follower'&&peer.peer===worldHostPeer) applyWorld(w);
   const pr=peer.presence&&peer.presence.s; let s=remotes.get(peer.peer);
   if(!pr||typeof pr!=='object'){ if(s&&!s.dead){s.dead=true;s.gone=true;} remotes.delete(peer.peer); return; }
@@ -939,7 +954,7 @@ function onRemote(peer){
 }
 const NET_DELAY=110;
 /* ----- shared world: one device (the world host) runs the bots for everyone ----- */
-const netBots=new Map(); let lastWQ=-1,lastWT=-1,worldRole='solo', worldHostPeer=null, followSince=0, lastWorldRecv=0, lastWorld=0, worldSeq=0, seedIdx=0; const deadLog=[];
+const netBots=new Map(), worldSeenFrom=new Map(); let pendingSwap=false, electedHost=null, electedAt=0, lastWQ=-1,lastWT=-1,worldRole='solo', worldHostPeer=null, followSince=0, lastWorldRecv=0, lastWorld=0, worldSeq=0, seedIdx=0; const deadLog=[];
 const isHuman=s=>s.player||(s.remote&&!s.netbot);
 function computeRole(){
   let role='solo', hostPeer=null;
@@ -949,19 +964,24 @@ function computeRole(){
       const elig=ps.filter(p=>p.kind!=='agent'&&p.presence&&p.presence.s&&['play','idle','dead'].includes(p.presence.s.st)).map(p=>p.peer).sort();
       if(elig.length>1&&myPeer&&elig.includes(myPeer)){hostPeer=elig[0]; role=hostPeer===myPeer?'host':'follower';} }
   }
-  // follower but the host isn't sending a world (older version, or stalled): keep our own bots
-  if(role==='follower'&&worldRole==='follower'&&performance.now()-Math.max(followSince,lastWorldRecv)>4000) role='solo';
+  // only follow a host that is really sending a world (an older version, or a stalled host, keeps our own bots)
+  const now=performance.now();
+  if(role==='follower'){
+    if(hostPeer!==electedHost){electedHost=hostPeer;electedAt=now;}
+    const seen=worldSeenFrom.get(hostPeer)||0;
+    if(now-seen>4000&&now-electedAt>5000) role='solo';
+  } else electedHost=null;
   setRole(role,role==='host'?myPeer:hostPeer);
 }
 function setRole(role,hostPeer){
   if(role===worldRole&&hostPeer===worldHostPeer) return;
   const prev=worldRole; worldRole=role; worldHostPeer=hostPeer;
   if(role==='follower'){
-    followSince=performance.now();
-    for(const s of snakes) if(!s.player&&!s.remote&&!s.dead){s.dead=true;s.gone=true;}
+    followSince=performance.now(); pendingSwap=true;   // keep our own bots until the host's bots arrive
     if(prev==='host'&&chan){try{chan.presence({w:null})}catch(e){}}
   } else {
     // adopt the host's bots right where they are, so nothing pops when hosting changes hands
+    pendingSwap=false;
     for(const [id,s] of netBots){ if(s.dead) continue; s.remote=false; s.netbot=false; s.buf=null; s.net=null; s.pers=pick(PERS); s.skill=rnd(.35,1); s.think=0; s.av=0; s.tAng=s.ang; }
     netBots.clear();
     if(role==='solo'&&prev==='host'&&chan){try{chan.presence({w:null})}catch(e){}}
@@ -971,7 +991,7 @@ function worldSend(){
   if(!chan||worldRole!=='host'||othersHere<1) return;
   const now=performance.now(); if(now-lastWorld<120) return; lastWorld=now;
   const bots=snakes.filter(s=>!s.player&&!s.remote&&!s.dead), b=[], seeds=[];
-  for(const s of bots) b.push([s.uid,SKINS.indexOf(s.skin),Math.round(s.x),Math.round(s.y),Math.round(s.ang*1000)/1000,Math.round(s.mass),(s.boosting?1:0)|(s.pu.ghost>0?2:0)]);
+  for(const s of bots) b.push([s.uid,s.skin===OPUS_SKIN?-2:SKINS.indexOf(s.skin),Math.round(s.x),Math.round(s.y),Math.round(s.ang*1000)/1000,Math.round(s.mass),(s.boosting?1:0)|(s.pu.ghost>0?2:0)]);
   for(let q=0;q<3&&bots.length;q++){const t=bots[(seedIdx++)%bots.length],n=t.n,st=Math.max(1,Math.ceil(n/24)),pts=[];
     for(let i=0;i<n;i+=st)pts.push(Math.round(t.bx[i]),Math.round(t.by[i])); pts.push(Math.round(t.bx[n-1]),Math.round(t.by[n-1])); seeds.push([t.uid,t.name,pts]);}
   while(deadLog.length&&now-deadLog[0].t>1500) deadLog.shift();
@@ -982,15 +1002,16 @@ function worldSend(){
 function applyWorld(w){
   if(!w||typeof w!=='object'||!Array.isArray(w.b)) return;
   if(w.q===lastWQ&&w.t===lastWT) return; lastWQ=w.q; lastWT=w.t;
+  if(pendingSwap){pendingSwap=false; for(const s of snakes) if(!s.player&&!s.remote&&!s.dead){s.dead=true;s.gone=true;}}
   const now=performance.now(), ts0=num(w.t,0,1e13), ts=ts0===null?now:ts0; lastWorldRecv=now;
   const seedMap=new Map(); if(Array.isArray(w.s)) for(const e of w.s) if(Array.isArray(e)&&e.length>=3) seedMap.set(e[0],e);
   const seen=new Set();
   for(const e of w.b){ if(!Array.isArray(e)||e.length<7) continue;
-    const id=num(e[0],0,1e12),k=num(e[1],-1,SKINS.length-1),x=num(e[2],-R*1.3,R*1.3),y=num(e[3],-R*1.3,R*1.3),a=num(e[4],-10,10),m=num(e[5],1,1e6),f=num(e[6],0,3);
+    const id=num(e[0],0,1e12),k=num(e[1],-2,SKINS.length-1),x=num(e[2],-R*1.3,R*1.3),y=num(e[3],-R*1.3,R*1.3),a=num(e[4],-10,10),m=num(e[5],1,1e6),f=num(e[6],0,3);
     if(id===null||x===null||y===null||a===null||m===null) continue;
     seen.add(id); let s=netBots.get(id);
     if(!s||s.dead){
-      s=baseSnake({name:'…',skin:SKINS[k!==null&&k>=0?k|0:0],mass:m}); s.remote=true; s.netbot=true; s.netId=id; s.x=x; s.y=y; s.ang=a; s.buf=[]; s.off=null; s.seeded=false;
+      s=baseSnake({name:'…',skin:k===-2?OPUS_SKIN:(k!==null&&k>=0?SKINS[k|0]:botSkin(id)),mass:m}); s.remote=true; s.netbot=true; s.netId=id; s.x=x; s.y=y; s.ang=a; s.buf=[]; s.off=null; s.seeded=false;
       const L=bodyLen(m)+60,steps=Math.ceil(L/8),tx=[],ty=[]; for(let j=steps;j>=0;j--){tx.push(x-Math.cos(a)*j*8);ty.push(y-Math.sin(a)*j*8);} s.tx=tx; s.ty=ty;
       netBots.set(id,s); snakes.push(s); sizeUp(s); rebuildBody(s);
     }
