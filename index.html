@@ -371,7 +371,7 @@ const lawnPat=(()=>{const S=256,c=mkc(S),g=c.getContext('2d');g.fillStyle='#2a54
   for(let k=0;k<5200;k++){const x=Math.random()*S,y=Math.random()*S,a=.65+rnd(-.6,.6),l=rnd(5,12),w=rnd(.6,1.2);g.strokeStyle=cols[Math.random()*6|0];g.lineWidth=w;g.lineCap='round';
     for(const ox of [-S,0,S])for(const oy of [-S,0,S]){if(x+ox<-14||x+ox>S+14||y+oy<-14||y+oy>S+14)continue;g.beginPath();g.moveTo(x+ox,y+oy);g.lineTo(x+ox+Math.cos(a)*l,y+oy+Math.sin(a)*l);g.stroke();}}
   return ctx.createPattern(c,'repeat');})();
-const TS0=12;   // grass lives in the world: fixed spacing and size, so it scales naturally with zoom
+const TS0=18;   // grass lives in the world: fixed spacing and size, so it scales naturally with zoom
 let grassQ=1, fpsAcc=0, fpsN=0;
 function tuneGrass(dt){ // keep frame rate smooth on slower devices by thinning grass a little
   fpsAcc+=dt; fpsN++; if(fpsAcc<2) return; const avg=fpsAcc/fpsN*1000; fpsAcc=0; fpsN=0;
