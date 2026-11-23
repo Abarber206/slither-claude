@@ -90,6 +90,16 @@ h2{font:700 28px/1.1 Fraunces,Georgia,serif;margin:0 0 6px;letter-spacing:-.02em
 .grid div{background:rgba(243,235,221,.05);border-radius:12px;padding:10px 6px}
 .grid b{display:block;font:700 22px Fraunces,Georgia,serif}
 .grid span{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+#custom .card{animation:pop .25s ease-out}
+.crow{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.crow label{display:flex;flex-direction:column;align-items:center;gap:5px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.crow input[type=color]{width:100%;height:38px;border:1px solid rgba(243,235,221,.18);border-radius:10px;background:none;padding:2px;cursor:pointer}
+#custom input[type=range]{accent-color:#D97757}
+.chips{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.chips button{border:1px solid rgba(243,235,221,.16);background:rgba(243,235,221,.05);color:var(--muted);border-radius:99px;padding:6px 11px;font:600 12px system-ui,sans-serif;cursor:pointer}
+.chips button.on{background:rgba(217,119,87,.22);border-color:var(--coral);color:var(--cream)}
+.sk.custom{background:conic-gradient(#D97757,#E6C86E,#9DB17C,#8AB4D8,#B79CD9,#E07A8F,#D97757)!important;position:relative}
+.sk.custom::after{content:'✎';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px;text-shadow:0 1px 3px rgba(0,0,0,.6)}
 #newbest{color:var(--coral);font-weight:700;font-size:13px;margin:-8px 0 14px}
 </style>
 </head>
@@ -112,6 +122,7 @@ h2{font:700 28px/1.1 Fraunces,Georgia,serif;margin:0 0 6px;letter-spacing:-.02em
     <input id="name" maxlength="14" placeholder="Your name" autocomplete="off" spellcheck="false">
     <div class="label">Skin · <span id="skinName"></span></div>
     <div id="skins"></div>
+    <button id="openCustom" class="btn2" style="width:100%;margin:-6px 0 16px">🎨 Customize your snake</button>
     <div class="label">World</div>
     <div class="seg"><button id="wMeadow">Meadow</button><button id="wWater">Water</button></div>
     <div class="label">Mode</div>
@@ -131,6 +142,17 @@ h2{font:700 28px/1.1 Fraunces,Georgia,serif;margin:0 0 6px;letter-spacing:-.02em
   </div>
 </div>
 
+<div id="custom" class="screen hidden">
+  <div class="card" style="width:min(400px,100%);padding:18px 18px 16px;max-height:94vh;overflow:auto">
+    <h2 style="font-size:24px">Your snake</h2>
+    <canvas id="pv" style="width:100%;height:120px;border-radius:14px;background:radial-gradient(ellipse at center,#2b5418,#173210);display:block;margin:6px 0 14px"></canvas>
+    <div class="crow"><label>Body<input type="color" id="cBody"></label><label>Pattern<input type="color" id="cPat"></label><label>Accent<input type="color" id="cAcc"></label><label>Eyes<input type="color" id="cEye"></label></div>
+    <div class="label">Pattern</div><div id="patBtns" class="chips"></div>
+    <div class="label">Pattern size</div><input type="range" id="cSize" min="4" max="16" step="1" style="width:100%">
+    <div class="label">Head</div><div id="accBtns" class="chips"></div>
+    <div class="jrow" style="margin-top:16px"><button id="cRand" class="btn2">🎲 Randomize</button><button id="cDone" class="btn" style="flex:1;padding:11px">Use this snake</button></div>
+  </div>
+</div>
 <div id="over" class="screen hidden">
   <div class="card">
     <h2 id="overTitle">Context window closed</h2>
@@ -175,17 +197,26 @@ const SKINS=[
  {n:'Sage',    base:'#9DB17C',pat:'stripe', c2:'#EDE4CC',cyc:8, eye:'#3A322D'},
  {n:'Rose',    base:'#E07A8F',pat:'diamond',c2:'#7A2E42',c3:'#F7D0D8',cyc:10,eye:'#F3EBDD'},
 ];
+const PATS=['solid','bands','rings','diamond','zigzag','stripe','saddle','spots','coral'];
+const PAT_NAME={solid:'Solid',bands:'Bands',rings:'Rings',diamond:'Diamond',zigzag:'Zigzag',stripe:'Stripe',saddle:'Saddle',spots:'Spots',coral:'Coral'};
+const ACCS=['none','crown','horns','bow','sparkle'];
+const ACC_NAME={none:'None',crown:'Crown',horns:'Horns',bow:'Bow',sparkle:'Sparkle'};
+const HEX=/^#[0-9a-fA-F]{6}$/;
+function makeCustom(c){return {n:'Custom',base:c.b,pat:c.p,c2:c.c2,c3:c.c3,cyc:c.cy,eye:c.e,gc:c.c2,acc:c.a==='none'?'':c.a,cfg:c};}
+function validCfg(c){return c&&typeof c==='object'&&HEX.test(c.b)&&HEX.test(c.c2)&&HEX.test(c.c3)&&HEX.test(c.e)&&PATS.includes(c.p)&&ACCS.includes(c.a)&&Number.isFinite(c.cy)&&c.cy>=4&&c.cy<=16;}
+const remoteSkinCache=new Map();
+function skinFromCfg(c){const key=JSON.stringify([c.b,c.p,c.c2,c.c3,c.e,c.cy|0,c.a]);let sk=remoteSkinCache.get(key);if(!sk){sk=makeCustom({b:c.b,p:c.p,c2:c.c2,c3:c.c3,e:c.e,cy:c.cy|0,a:c.a});remoteSkinCache.set(key,sk);}return sk;}
 const NAMES=['Opus','Sonnet','Haiku','Tokenizer','Context Window','Hallucination','Gradient','Backprop','Attention Head','Temperature 2.0','Stop Sequence','System Prompt','Embedding','Overfit','Big O','Null Pointer','Segfault','Recursion','Chain of Thought','Latent Space','Dropout','Softmax','Kernel Panic','Semicolon','Rubber Duck','Merge Conflict','Off By One','Lorem Ipsum','Async Await','Prompt Injection','Fine Tune','Beam Search','Token Budget','Vector DB','Batch Norm','Learning Rate','Epoch','Perplexity','Cache Miss','Race Condition','Heap Overflow','Hotfix','Regex','Deadlock','Tensor','Few Shot','Zero Shot','Stack Trace'];
 const PERS=['hunter','grazer','coward','wanderer','grazer','hunter','grazer'];
 const PU_DUR={magnet:9,turbo:6,ghost:6};
 const PU_COL={magnet:'#E6C86E',turbo:'#D97757',ghost:'#B79CD9'};
 const PU_NAME={magnet:'Magnet',turbo:'Turbo',ghost:'Phase'};
 const PU_DESC={magnet:'sparks fly to you',turbo:'boost for free',ghost:'slip through snakes'};
-const TIPS=['Tip: tap Create party and send friends the code to play together.','Tip: in the Meadow, flattened grass shows where snakes just passed.','Tip: boost in front of a snake\'s head to cut it off.','Tip: coil around a smaller snake to trap it.','Tip: the bigger you get, the wider you turn.','Tip: dead snakes spill their length as glowing sparks.','Tip: Phase lets you pass through bodies for a few seconds.','Tip: Opus starts huge. Stay out of its way… at first.','Tip: boosting costs length, so pick your moments.','Tip: green dots on the leaderboard are real people.'];
+const TIPS=['Tip: tap 🎨 Customize to design your own snake.','Tip: tap Create party and send friends the code to play together.','Tip: in the Meadow, flattened grass shows where snakes just passed.','Tip: boost in front of a snake\'s head to cut it off.','Tip: coil around a smaller snake to trap it.','Tip: the bigger you get, the wider you turn.','Tip: dead snakes spill their length as glowing sparks.','Tip: Phase lets you pass through bodies for a few seconds.','Tip: Opus starts huge. Stay out of its way… at first.','Tip: boosting costs length, so pick your moments.','Tip: green dots on the leaderboard are real people.'];
 const TINTS=[[70,170,200],[120,125,235],[217,119,87],[175,125,225],[95,195,160]];
 
 /* ---------- canvas ---------- */
-const cvs=$('c'), ctx=cvs.getContext('2d');
+const cvs=$('c'), mainCtx=cvs.getContext('2d'); let ctx=mainCtx;
 const mini=$('mini'), mctx=mini.getContext('2d');
 let W=0,H=0,DPR=1;
 const cam={x:0,y:0,z:.8};
@@ -389,6 +420,9 @@ function drawPattern(g,sk,k,K,m){
     case 'zigzag': {const off=Math.sin(ph*TAU)*rad*.42;g.fillRect(0,m+off-rad*.24,SS,rad*.48);break;}
     case 'stripe': g.fillRect(0,m-rad*.15,SS,rad*.3);g.globalAlpha=.55;g.fillRect(0,m-rad*.64,SS,rad*.08);g.fillRect(0,m+rad*.56,SS,rad*.08);g.globalAlpha=1;break;
     case 'saddle': if(ph<.4){g.beginPath();g.ellipse(m,m,rad*.7,rad*.78,0,0,TAU);g.fill();} break;
+    case 'rings': if(ph<.14) g.fillRect(0,0,SS,SS); break;
+    case 'spots': {const q=k%3; g.beginPath(); if(q===0){g.ellipse(m,m-rad*.5,rad*.28,rad*.22,0,0,TAU);g.ellipse(m,m+rad*.5,rad*.28,rad*.22,0,0,TAU);} else if(q===2){g.ellipse(m,m,rad*.26,rad*.24,0,0,TAU);} g.fill(); break;}
+    case 'solid': break;
   }
 }
 function skinSprites(sk){
@@ -883,8 +917,8 @@ function onRemote(peer){
     if(pts.length&1) pts.pop();
     if(s&&(s.dead||s.netId!==id)){ if(!s.dead){s.dead=true;s.gone=true;} s=null; }
     if(!s){
-      const ki=num(pr.k,0,SKINS.length-1);
-      s=baseSnake({name:String(pr.n||'Player').replace(/[\u0000-\u001f\u007f-\u009f]/g,'').slice(0,14)||'Player',skin:SKINS[ki===null?0:Math.floor(ki)],mass:m});
+      const ki=num(pr.k,-1,SKINS.length-1), rsk=(ki===-1&&validCfg(pr.cs))?skinFromCfg(pr.cs):SKINS[ki===null||ki<0?0:Math.floor(ki)];
+      s=baseSnake({name:String(pr.n||'Player').replace(/[\u0000-\u001f\u007f-\u009f]/g,'').slice(0,14)||'Player',skin:rsk,mass:m});
       s.remote=true; s.peer=peer.peer; s.netId=id; s.x=x; s.y=y; s.ang=a; s.buf=[]; s.off=null;
       // seed the body once from their outline; after that the body follows its own trail like any local snake
       const tx=[],ty=[]; for(let i=pts.length-2;i>=0;i-=2){tx.push(pts[i]);ty.push(pts[i+1]);} s.tx=tx; s.ty=ty;
@@ -1003,7 +1037,7 @@ function netSend(force){
     const n=player.n,stride=Math.max(1,Math.ceil(n/40)),p=[];
     for(let i=0;i<n;i+=stride) p.push(Math.round(player.bx[i]),Math.round(player.by[i]));
     if((n-1)%stride) p.push(Math.round(player.bx[n-1]),Math.round(player.by[n-1]));
-    pr={st:'play',id:player.uid,t:Math.round(now),n:player.name,k:skinIdx,x:Math.round(player.x*10)/10,y:Math.round(player.y*10)/10,a:Math.round(player.ang*1000)/1000,m:Math.round(player.mass),b:player.boosting?1:0,g:player.pu.ghost>0?1:0,p};
+    pr={st:'play',id:player.uid,t:Math.round(now),n:player.name,k:useCustom?-1:skinIdx,cs:useCustom?customCfg:undefined,x:Math.round(player.x*10)/10,y:Math.round(player.y*10)/10,a:Math.round(player.ang*1000)/1000,m:Math.round(player.mass),b:player.boosting?1:0,g:player.pu.ghost>0?1:0,p};
     lastNetKey='play';
   } else if(state==='dying'||state==='over'){
     const key='dead'+stats.deadId; if(!force&&key===lastNetKey) return; lastNetKey=key;
@@ -1271,6 +1305,8 @@ function drawHead(s,hr){
   else if(sk.pat==='stripe'){ctx.fillRect(-2*hr,-hr*.12,hr*2.65,hr*.24);ctx.globalAlpha=.5;ctx.fillRect(-2*hr,-hr*.86,hr*2.2,hr*.07);ctx.fillRect(-2*hr,hr*.79,hr*2.2,hr*.07);ctx.globalAlpha=1;}
   else if(sk.pat==='saddle'){ctx.beginPath();ctx.ellipse(-hr*.55,0,hr*.42,hr*.55,0,0,TAU);ctx.fill();}
   else if(sk.pat==='bands'){ctx.globalAlpha=.9;ctx.fillRect(-hr*1.2,-2*hr,hr*.5,4*hr);ctx.globalAlpha=1;}
+  else if(sk.pat==='rings'){ctx.fillRect(-hr*1.05,-2*hr,hr*.22,4*hr);}
+  else if(sk.pat==='spots'){ctx.beginPath();ctx.arc(-hr*.45,-hr*.35,hr*.16,0,TAU);ctx.arc(-hr*.45,hr*.35,hr*.16,0,TAU);ctx.arc(hr*.05,0,hr*.12,0,TAU);ctx.fill();}
   // dark lip line along the jaw edge
   ctx.lineWidth=hr*.16; ctx.strokeStyle='rgba(0,0,0,.28)'; P(); ctx.stroke();
   // head plates (rostral, internasals, frontal, parietals)
@@ -1311,6 +1347,26 @@ function drawHead(s,hr){
   // nostrils
   ctx.fillStyle='rgba(0,0,0,.65)';
   for(const side of [-1,1]){ctx.beginPath();ctx.ellipse(hr*1.24,side*hr*.17,hr*.07,hr*.04,side*.5,0,TAU);ctx.fill();}
+  if(sk.acc) drawAccessory(sk.acc,hr);
+}
+function drawAccessory(a,hr){
+  ctx.save(); ctx.lineJoin='round'; ctx.lineCap='round';
+  if(a==='crown'){ // little gold crown sitting on the back of the head
+    ctx.fillStyle='#E6C86E'; ctx.strokeStyle='#8a6a1e'; ctx.lineWidth=Math.max(.6,hr*.05);
+    ctx.beginPath(); ctx.moveTo(-hr*.15,-hr*.5); ctx.lineTo(-hr*.62,-hr*.5); ctx.lineTo(-hr*.95,-hr*.42); ctx.lineTo(-hr*.72,-hr*.22); ctx.lineTo(-hr*1.02,0); ctx.lineTo(-hr*.72,hr*.22); ctx.lineTo(-hr*.95,hr*.42); ctx.lineTo(-hr*.62,hr*.5); ctx.lineTo(-hr*.15,hr*.5); ctx.closePath(); ctx.fill(); ctx.stroke();
+    for(const [yy,c] of [[-hr*.3,'#D97757'],[0,'#8AB4D8'],[hr*.3,'#9DB17C']]){ctx.fillStyle=c;ctx.beginPath();ctx.arc(-hr*.38,yy,hr*.08,0,TAU);ctx.fill();}
+  } else if(a==='horns'){
+    ctx.fillStyle='#EDE4CC'; ctx.strokeStyle='rgba(60,40,20,.6)'; ctx.lineWidth=Math.max(.6,hr*.04);
+    for(const sd of [-1,1]){ctx.beginPath();ctx.moveTo(-hr*.2,sd*hr*.48);ctx.quadraticCurveTo(-hr*.7,sd*hr*1.2,-hr*1.35,sd*hr*1.05);ctx.quadraticCurveTo(-hr*.75,sd*hr*.95,-hr*.45,sd*hr*.32);ctx.closePath();ctx.fill();ctx.stroke();}
+  } else if(a==='bow'){
+    ctx.fillStyle='#E07A8F'; ctx.strokeStyle='#8C3A4E'; ctx.lineWidth=Math.max(.6,hr*.04);
+    for(const sd of [-1,1]){ctx.beginPath();ctx.moveTo(-hr*.55,0);ctx.quadraticCurveTo(-hr*.2,sd*hr*.75,-hr*.9,sd*hr*.7);ctx.quadraticCurveTo(-hr*1.05,sd*hr*.3,-hr*.55,0);ctx.fill();ctx.stroke();}
+    ctx.beginPath();ctx.arc(-hr*.55,0,hr*.14,0,TAU);ctx.fill();ctx.stroke();
+  } else if(a==='sparkle'){
+    ctx.translate(-hr*.55,0); ctx.rotate(clock*1.6); ctx.strokeStyle='#D97757'; ctx.lineWidth=Math.max(.8,hr*.12);
+    ctx.beginPath(); for(let k=0;k<8;k++){const an=k*Math.PI/4,l=k%2?hr*.32:hr*.5;ctx.moveTo(0,0);ctx.lineTo(Math.cos(an)*l,Math.sin(an)*l);} ctx.stroke();
+  }
+  ctx.restore();
 }
 function drawSnake(s){
   const sk=s.skin,spr=skinSprites(sk),KC=spr.length,n=s.n,r=s.rs||s.r,bx=s.bx,by=s.by,m=r*2.6;
@@ -1450,15 +1506,53 @@ let skinIdx=clamp(parseInt(store.get('slc_skin','0'))||0,0,SKINS.length-1);
 nameEl.value=store.get('slc_name','');
 nameEl.addEventListener('change',()=>{lastNetKey='';netSend(true);});
 const skinsEl=$('skins');
-function showSkinName(){$('skinName').textContent=SKINS[skinIdx].n;}
+let customCfg=(()=>{try{const c=JSON.parse(store.get('slc_custom','null'));if(validCfg(c))return c;}catch(e){}return {b:'#D97757',p:'diamond',c2:'#3B2A1A',c3:'#F3EBDD',e:'#F3C969',cy:10,a:'sparkle'};})();
+let useCustom=store.get('slc_usecustom','0')==='1';
+let customSkin=makeCustom(customCfg);
+const currentSkin=()=>useCustom?customSkin:SKINS[skinIdx];
+function showSkinName(){$('skinName').textContent=useCustom?'Custom':SKINS[skinIdx].n;}
+function markSkins(){[...skinsEl.children].forEach((e,j)=>e.classList.toggle('on',useCustom?j===0:j===skinIdx+1));showSkinName();store.set('slc_usecustom',useCustom?'1':'0');}
+{const cb=document.createElement('button');cb.className='sk custom';cb.title='Custom';cb.setAttribute('aria-label','Custom skin');
+  cb.addEventListener('click',()=>{if(useCustom){openCustom();return;}useCustom=true;markSkins();tone(660,.08,'sine',.05);});skinsEl.appendChild(cb);}
 SKINS.forEach((sk,i)=>{
-  const b=document.createElement('button');b.className='sk'+(i===skinIdx?' on':'');b.title=sk.n;b.setAttribute('aria-label',sk.n+' skin');
+  const b=document.createElement('button');b.className='sk';b.title=sk.n;b.setAttribute('aria-label',sk.n+' skin');
   b.style.background=sk.pat==='coral'?`linear-gradient(135deg,${sk.base} 0 40%,${sk.c2} 40% 55%,${sk.c3} 55% 65%,${sk.c2} 65% 80%,${sk.base} 80%)`:
     `radial-gradient(ellipse 30% 60% at 50% 50%,${sk.c2} 0 98%,transparent 100%),${sk.base}`;
-  b.addEventListener('click',()=>{skinIdx=i;[...skinsEl.children].forEach((e,j)=>e.classList.toggle('on',j===i));showSkinName();tone(660,.08,'sine',.05);});
+  b.addEventListener('click',()=>{useCustom=false;skinIdx=i;markSkins();tone(660,.08,'sine',.05);});
   skinsEl.appendChild(b);
 });
-showSkinName();
+markSkins();
+/* ---- customizer ---- */
+const customEl=$('custom'); let pvRaf=0;
+function applyCustom(){customSkin=makeCustom(customCfg);store.set('slc_custom',JSON.stringify(customCfg));
+  $('cBody').value=customCfg.b;$('cPat').value=customCfg.c2;$('cAcc').value=customCfg.c3;$('cEye').value=customCfg.e;$('cSize').value=customCfg.cy;
+  [...$('patBtns').children].forEach(b=>b.classList.toggle('on',b.dataset.v===customCfg.p));
+  [...$('accBtns').children].forEach(b=>b.classList.toggle('on',b.dataset.v===customCfg.a));
+  if(player&&!player.dead&&useCustom) player.skin=customSkin;}
+for(const pt of PATS){const b=document.createElement('button');b.textContent=PAT_NAME[pt];b.dataset.v=pt;b.addEventListener('click',()=>{customCfg.p=pt;applyCustom();});$('patBtns').appendChild(b);}
+for(const ac of ACCS){const b=document.createElement('button');b.textContent=ACC_NAME[ac];b.dataset.v=ac;b.addEventListener('click',()=>{customCfg.a=ac;applyCustom();});$('accBtns').appendChild(b);}
+for(const [id,key] of [['cBody','b'],['cPat','c2'],['cAcc','c3'],['cEye','e']]) $(id).addEventListener('input',e=>{if(HEX.test(e.target.value)){customCfg[key]=e.target.value;applyCustom();}});
+$('cSize').addEventListener('input',e=>{customCfg.cy=clamp(parseInt(e.target.value)||10,4,16);applyCustom();});
+const rhex=()=>{const h=Math.random(),sat=.35+Math.random()*.5,lit=.3+Math.random()*.45;const f=n=>{const k=(n+h*12)%12,a=sat*Math.min(lit,1-lit);return Math.round(255*(lit-a*Math.max(-1,Math.min(k-3,9-k,1))));};return '#'+[f(0),f(8),f(4)].map(v=>v.toString(16).padStart(2,'0')).join('');};
+$('cRand').addEventListener('click',()=>{customCfg={b:rhex(),p:pick(PATS),c2:rhex(),c3:rhex(),e:pick(['#F3C969','#E8A55A','#D04848','#8AB4D8','#F3EBDD','#9DB17C']),cy:4+(Math.random()*12|0),a:pick(ACCS)};applyCustom();tone(520+Math.random()*300,.08,'triangle',.05);});
+function openCustom(){useCustom=true;markSkins();applyCustom();menuEl.classList.add('hidden');customEl.classList.remove('hidden');cancelAnimationFrame(pvRaf);pvRaf=requestAnimationFrame(drawPreview);}
+function closeCustom(){customEl.classList.add('hidden');menuEl.classList.remove('hidden');cancelAnimationFrame(pvRaf);markSkins();}
+$('openCustom').addEventListener('click',openCustom);
+$('cDone').addEventListener('click',()=>{closeCustom();tone(587,.1,'triangle',.06);tone(880,.14,'triangle',.06,0,.08);});
+function drawPreview(){
+  pvRaf=requestAnimationFrame(drawPreview);
+  const pc=$('pv'),dpr=Math.min(2,devicePixelRatio||1),w=pc.clientWidth,h=pc.clientHeight; if(!w) return;
+  if(pc.width!==Math.round(w*dpr)){pc.width=Math.round(w*dpr);pc.height=Math.round(h*dpr);}
+  const g=pc.getContext('2d'); g.setTransform(1,0,0,1,0,0); g.clearRect(0,0,pc.width,pc.height);
+  const sk=customSkin, spr=skinSprites(sk), KC=spr.length, r=Math.min(18,h*.15), n=Math.max(24,Math.floor((w*.82)/(r*.4))), sp=r*.4, t=performance.now()/1000;
+  const X=[],Y=[]; for(let i=0;i<n;i++){const amp=r*1.15*Math.min(1,i/5);X.push(w*.86-i*sp);Y.push(h/2+Math.sin(i*.16-t*3.2)*amp);}
+  const tailLen=Math.floor(n*.3);
+  for(let i=n-1;i>=1;i--){const j=i<n-1?i+1:i,dx=X[i-1]-X[j],dy=Y[i-1]-Y[j],d=Math.hypot(dx,dy)||1,c=dx/d,sn=dy/d,tt=n-1-i,rr=tt<tailLen?r*(.22+.78*Math.pow(tt/tailLen,.6)):r;
+    g.setTransform(dpr*c,dpr*sn,-dpr*sn,dpr*c,dpr*X[i],dpr*Y[i]); g.drawImage(spr[i%KC],-rr,-rr,rr*2,rr*2);}
+  const dx=X[0]-X[2],dy=Y[0]-Y[2],a=Math.atan2(dy,dx);
+  const saved=ctx; ctx=g; g.setTransform(dpr*Math.cos(a),dpr*Math.sin(a),-dpr*Math.sin(a),dpr*Math.cos(a),dpr*X[0],dpr*Y[0]);
+  try{drawHead({skin:sk,uid:7,look:a,ang:a,hang:a},r*.97);}finally{ctx=saved;}
+}
 function setHash(){try{const h=netMode==='online'&&partyCode?'#party-'+partyCode:'';if((location.hash||'')!==h){if(h)location.hash=h;else history.replaceState(null,'',location.pathname+location.search);}}catch(e){}}
 function applyNet(){store.set('slc_mode',netMode);store.set('slc_party',partyCode);setHash();bindChannel();updateParty();}
 $('mOnline').addEventListener('click',()=>{netMode='online';applyNet();});
@@ -1489,7 +1583,7 @@ function startGame(){
   initAudio();
   const name=(nameEl.value.trim()||'You').slice(0,14);
   store.set('slc_name',nameEl.value.trim()); store.set('slc_skin',String(skinIdx));
-  const s=newSnake({name,skin:SKINS[skinIdx],mass:20,player:true});
+  const s=newSnake({name,skin:currentSkin(),mass:20,player:true});
   const idx=player?snakes.indexOf(player):-1;
   if(idx>=0) snakes[idx]=s; else snakes.push(s);
   player=s; cam.x=s.x; cam.y=s.y; wLX=cam.x; wLY=cam.y; wa.fill(0); wb.fill(0); hA.fill(0); hB.fill(0); fO.fill(0); fN.fill(0); gF.fill(0); gK.fill(0); GBx.fill(0); GBy.fill(0); GVx.fill(0); GVy.fill(0); waterPrimed=false;
