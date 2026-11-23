@@ -255,14 +255,14 @@ let W=0,H=0,DPR=1;
 const cam={x:0,y:0,z:.8};
 
 /* ---------- water ---------- */
-let world=(function(){try{return localStorage.getItem('slc_world')==='water'?'water':'meadow'}catch(e){return 'meadow'}})(),gF=null,gDX=null,gDY=null,gK=null,GBx=null,GBy=null,GVx=null,GVy=null,PX=null,PY=null,PW=null,BM=null,GOV=[],TOV=[],waterPrimed=false,WL=1.6,WAVEL=.11,wAcc=0,WC=4,gw=0,gh=0,hA=null,hB=null,fO=null,fN=null,wa=null,wb=null,wt1=null,wt2=null,wimg=null,wShX=0,wShY=0,wLX=0,wLY=0;
+let world=(function(){try{return localStorage.getItem('slc_world')==='water'?'water':'meadow'}catch(e){return 'meadow'}})(),gF=null,gDX=null,gDY=null,gK=null,GBx=null,GBy=null,GVx=null,GVy=null,PX=null,PY=null,PW=null,BM=null,BMS=null,GOV=[],TOV=[],waterPrimed=false,WL=1.6,WAVEL=.11,wAcc=0,WC=4,gw=0,gh=0,hA=null,hB=null,fO=null,fN=null,wa=null,wb=null,wt1=null,wt2=null,wimg=null,wShX=0,wShY=0,wLX=0,wLY=0;
 const wcv=document.createElement('canvas'), wctx=wcv.getContext('2d');
 function initWater(){
   WC=(W*H>1.2e6)?5:4; gw=Math.ceil(W/WC)+3; gh=Math.ceil(H/WC)+3; const n=gw*gh;
   wa=new Float32Array(n); wb=new Float32Array(n); wt1=new Float32Array(n); wt2=new Float32Array(n);
   hA=new Float32Array(n); hB=new Float32Array(n); fO=new Float32Array(n); fN=new Float32Array(n);
   gF=new Float32Array(n); gDX=new Float32Array(n); gDY=new Float32Array(n);
-  gK=new Float32Array(n); GBx=new Float32Array(n); GBy=new Float32Array(n); GVx=new Float32Array(n); GVy=new Float32Array(n); PX=new Float32Array(n); PY=new Float32Array(n); PW=new Float32Array(n); BM=new Float32Array(n);
+  gK=new Float32Array(n); GBx=new Float32Array(n); GBy=new Float32Array(n); GVx=new Float32Array(n); GVy=new Float32Array(n); PX=new Float32Array(n); PY=new Float32Array(n); PW=new Float32Array(n); BM=new Float32Array(n); BMS=new Float32Array(n);
   wcv.width=gw; wcv.height=gh; wimg=wctx.createImageData(gw,gh); const d=wimg.data; for(let i=3;i<d.length;i+=4) d[i]=255;
   wLX=cam.x; wLY=cam.y; wShX=wShY=0;
 }
@@ -284,7 +284,7 @@ function waterTrack(){
   if(!wZ) wZ=z;
   if(Math.abs(z-wZ)>wZ*.01){ // zoom changed: resample the screen-space fields so trails stay put
     const f=wZ/z, cx=(W/2)/WC+1+wShX, cy=(H/2)/WC+1+wShY;
-    for(const A of (world==='water'?[wa,wb,hA,hB,fO]:[gF,gK,GBx,GBy,GVx,GVy,BM])){
+    for(const A of (world==='water'?[wa,wb,hA,hB,fO]:[gF,gK,GBx,GBy,GVx,GVy,BM,BMS])){
       for(let y=0;y<gh;y++){const sy=Math.round(cy+(y-cy)*f); const row=y*gw;
         if(sy<0||sy>=gh){for(let x=0;x<gw;x++) wt1[row+x]=0; continue;}
         const srow=sy*gw; for(let x=0;x<gw;x++){const sx=Math.round(cx+(x-cx)*f); wt1[row+x]=(sx>=0&&sx<gw)?A[srow+sx]:0;}}
@@ -294,7 +294,7 @@ function waterTrack(){
   } wShX+=(cam.x-wLX)*z/WC; wShY+=(cam.y-wLY)*z/WC; wLX=cam.x; wLY=cam.y;
   const ix=Math.trunc(wShX), iy=Math.trunc(wShY);
   if(ix||iy){wShX-=ix;wShY-=iy;
-    for(const A of (world==='water'?[wa,wb,hA,hB,fO]:[gF,gK,GBx,GBy,GVx,GVy,BM])){shiftBuf(A,wt1,ix,iy);A.set(wt1);}
+    for(const A of (world==='water'?[wa,wb,hA,hB,fO]:[gF,gK,GBx,GBy,GVx,GVy,BM,BMS])){shiftBuf(A,wt1,ix,iy);A.set(wt1);}
     // what scrolled in has no history yet: treat it as already displaced so it doesn't splash
   }
 }
@@ -361,6 +361,7 @@ function grassStep(){
     ax+=(GBx[i-1]+GBx[i+1]+GBx[i-gw]+GBx[i+gw]-4*bx)*KC; ay+=(GBy[i-1]+GBy[i+1]+GBy[i-gw]+GBy[i+gw]-4*by)*KC;
     const damp=1-C*dt; GVx[i]=(GVx[i]+ax*dt)*damp; GVy[i]=(GVy[i]+ay*dt)*damp;}}
   for(let i=0;i<n;i++){let bx=GBx[i]+GVx[i]*dt,by=GBy[i]+GVy[i]*dt;const m=bx*bx+by*by;if(m>1.2){const f=Math.sqrt(1.2/m);bx*=f;by*=f;GVx[i]*=.6;GVy[i]*=.6;}GBx[i]=bx;GBy[i]=by;}
+  for(let i=0;i<n;i++) BMS[i]+=(BM[i]-BMS[i])*.1;
   PW.fill(0);
 }
 const GH=(i,j,k)=>{let h=Math.imul(i,374761393)^Math.imul(j,668265263)^Math.imul(k,2147483647);h=Math.imul(h^(h>>>13),1274126177);return ((h^(h>>>16))>>>0)/4294967296;};
@@ -421,6 +422,8 @@ function tuneGrass(dt){ // keep frame rate smooth on slower devices by thinning 
   fpsAcc+=dt; fpsN++; if(fpsAcc<2) return; const avg=fpsAcc/fpsN*1000; fpsAcc=0; fpsN=0;
   if(avg>21&&grassQ>.35) grassQ=Math.max(.35,grassQ*.82); else if(avg<14&&grassQ<1) grassQ=Math.min(1,grassQ*1.12);
 }
+// draw a tuft leaning by (lx,ly): the base stays put and the tips stretch toward the lean. Axis-aligned, so it stays fast.
+function tuftAt(img,x,y,sz,lx,ly){ const w=sz+Math.abs(lx), h=sz+Math.abs(ly); ctx.drawImage(img,x+lx*.5-w/2,y+ly*.5-h/2,w,h); }
 function drawMeadow(){
   const z=cam.z;
   ctx.fillStyle=ground; ctx.fillRect(vx0,vy0,vx1-vx0,vy1-vy0);
@@ -449,20 +452,21 @@ function drawMeadow(){
     const x=(i+h1*1.6-.3)*S, y=(j+h2*1.6-.3)*S; if(x*x+y*y>R2) continue;
     // rolling gusts sweep across the field
     const along=x*wcx+y*wcy, gust=Math.sin(along*.0021-t*1.3+h3*1.5)*.6+Math.sin(along*.0009-t*.6+y*.0007)*.4, wm=.04*gust+.01, dxs=(x-cam.x)*z, dys=(y-cam.y)*z, pu=Math.min(1,Math.hypot(dxs,dys)*PERS), pa=Math.atan2(dys,dxs), pm=.06+pu*.42+(h2-.5)*.06;
-    const bx=Math.cos(pa)*pm+wcx*wm, by=Math.sin(pa)*pm+wcy*wm;
+    const sz0=size*(.72+h3*.6)*(1+.42*tw), lean=sz0*(.04+pu*.26), lx=Math.cos(pa)*lean+wcx*wm*sz0*.7, ly=Math.sin(pa)*lean+wcy*wm*sz0*.7;
     const sx=(W/2+(x-cam.x)*z)/WC+1+wShX, sy=(H/2+(y-cam.y)*z)/WC+1+wShY, gx=sx|0, gy=sy|0;
     let fx=0,fy=0,fm=0;
     if(gx>0&&gy>0&&gx<gw-1&&gy<gh-1){const c=gy*gw+gx; fx=GBx[c]; fy=GBy[c]; fm=Math.hypot(fx,fy);}
-    const sz=size*(.72+h3*.6)*(1+.42*tw), hf=sz/2, vrow=(h1*3|0)*GM; let siR=-1,siP=-1;
+    const sz=sz0, vrow=(h1*3|0)*GM; let siR=-1,siP=-1;
     let pw=clamp((fm-.06)/.22,0,1); pw=pw*pw*(3-2*pw);
-    if(pw<1){const m=Math.hypot(bx,by), mi=m<.22?0:m<.43?1:2; let di=Math.round(Math.atan2(by,bx)*DQ+(h3-.5)*3); di=((di%GD)+GD)%GD;
-      const si=(vrow+mi)*GD+di; siR=si; ctx.globalAlpha=fa*(1-pw); ctx.drawImage(GSPR[si],x-hf,y-hf,sz,sz);
-      if(tw<.25&&gx>0&&gy>0&&gx<gw-1&&gy<gh-1){const bm=BM[gy*gw+gx]; if(bm>.1&&bm<.64){const e=Math.min(1,(bm-.1)/.12)*Math.min(1,(.64-bm)/.1); GOV.push(si,x-hf,y-hf,sz,fa*(1-pw)*e*.55);}}}
-    if(pw>0){const mi=fm<.43?1:fm<.64?2:fm<.85?3:4; let di=Math.round(Math.atan2(fy,fx)*DQ); di=((di%GD)+GD)%GD;
-      siP=(vrow+mi)*GD+di; ctx.globalAlpha=fa*pw; ctx.drawImage(GSPR[siP],x-hf,y-hf,sz,sz);}
-    if(tw>.25&&gx>0&&gy>0&&gx<gw-1&&gy<gh-1&&BM[gy*gw+gx]>.01) TOV.push(pw>.5&&siP>=0?siP:(siR>=0?siR:siP),x-hf,y-hf,sz,fa*clamp((tw-.25)/.35,0,1)*.93);
+    // each tuft keeps ONE fixed pose; perspective and wind only bend it smoothly (no popping between poses)
+    const bmS=(gx>0&&gy>0&&gx<gw-1&&gy<gh-1)?BMS[gy*gw+gx]:0;
+    if(pw<1){siR=(vrow+(h2>.72?1:0))*GD+((GH(i,j,6)*GD)|0); ctx.globalAlpha=fa*(1-pw); tuftAt(GSPR[siR],x,y,sz,lx,ly);
+      if(tw<.25&&bmS>.08&&bmS<.64){const e=Math.min(1,(bmS-.08)/.14)*Math.min(1,(.64-bmS)/.12); GOV.push(siR,x,y,sz,fa*(1-pw)*e*.5,lx,ly,0);}}
+    if(pw>0){const mi=fm<.43?1:fm<.64?2:fm<.85?3:4, A=Math.atan2(fy,fx)*DQ; let di=Math.round(A); di=((di%GD)+GD)%GD;
+      siP=(vrow+mi)*GD+di; ctx.globalAlpha=fa*pw; tuftAt(GSPR[siP],x,y,sz,0,0);}
+    if(tw>.25&&bmS>.01){const useP=pw>.5&&siP>=0; TOV.push(useP?siP:siR,x,y,sz,fa*clamp((tw-.25)/.35,0,1)*.93,useP?0:lx,useP?0:ly,0);}
   }
-  ctx.globalAlpha=1;
+  ctx.globalAlpha=1; ctx.setTransform(K,0,0,K,OX,OY);
   }
   drawScrapes();
   // pressed-down groove over the blades: flattened grass reads darker until it springs back
@@ -1888,15 +1892,15 @@ function render(){
   // grass right beside a body is drawn again on top, so snakes slither THROUGH the meadow (heads stay clear)
   if(world==='meadow'&&GOV.length){ctx.setTransform(K,0,0,K,OX,OY);
     const H=[]; for(const s of snakes){if(s.dead) continue; const hx=s.hx===undefined?s.x:s.hx, hy=s.hy===undefined?s.y:s.hy; if(hx<vx0-200||hx>vx1+200||hy<vy0-200||hy>vy1+200) continue; H.push(hx,hy,(s.rs||s.r)*1.2+10);}
-    for(let k=0;k<GOV.length;k+=5){const hs=GOV[k+3]/2, cx=GOV[k+1]+hs, cy=GOV[k+2]+hs; let a=GOV[k+4];
+    for(let k=0;k<GOV.length;k+=8){const cx=GOV[k+1], cy=GOV[k+2]; let a=GOV[k+4];
       for(let q=0;q<H.length&&a>0;q+=3){const d=Math.hypot(cx-H[q],cy-H[q+1]), r0=H[q+2]; if(d<r0+20) a*=clamp((d-r0)/20,0,1);}
-      if(a<.02) continue; ctx.globalAlpha=a; ctx.drawImage(GSPR[GOV[k]],GOV[k+1],GOV[k+2],GOV[k+3],GOV[k+3]);}
+      if(a<.02) continue; ctx.globalAlpha=a; tuftAt(GSPR[GOV[k]],cx,cy,GOV[k+3],GOV[k+5],GOV[k+6]);}
     ctx.globalAlpha=1;}
   if(world==='meadow'&&TOV.length){ctx.setTransform(K,0,0,K,OX,OY);
     const me=state==='replay'?null:(player&&!player.dead?player:null), mx=me?(me.hx===undefined?me.x:me.hx):0, my=me?(me.hy===undefined?me.y:me.hy):0, mr=me?(me.rs||me.r)*1.3+14:0;
-    for(let k=0;k<TOV.length;k+=5){const hs=TOV[k+3]/2; let a=TOV[k+4];
-      if(me){const d=Math.hypot(TOV[k+1]+hs-mx,TOV[k+2]+hs-my); if(d<mr+30) a*=.25+.75*clamp((d-mr)/30,0,1);}
-      ctx.globalAlpha=a; ctx.drawImage(GSPR[TOV[k]],TOV[k+1],TOV[k+2],TOV[k+3],TOV[k+3]);}
+    for(let k=0;k<TOV.length;k+=8){let a=TOV[k+4];
+      if(me){const d=Math.hypot(TOV[k+1]-mx,TOV[k+2]-my); if(d<mr+30) a*=.25+.75*clamp((d-mr)/30,0,1);}
+      ctx.globalAlpha=a; tuftAt(GSPR[TOV[k]],TOV[k+1],TOV[k+2],TOV[k+3],TOV[k+5],TOV[k+6]);}
     ctx.globalAlpha=1;}
   if(nightOv){ ctx.setTransform(1,0,0,1,0,0); ctx.globalCompositeOperation='source-atop'; ctx.fillStyle=`rgba(6,12,32,${.58*NIGHT})`; ctx.fillRect(0,0,ovc.width,ovc.height); ctx.globalCompositeOperation='source-over';
     ctx=mainCtx; ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(ovc,0,0); ctx.setTransform(K,0,0,K,OX,OY); }
@@ -2044,7 +2048,7 @@ $('pCopy').addEventListener('click',()=>{
   try{navigator.clipboard.writeText(text).then(()=>done(true),()=>done(false));}catch(e){done(false);}
 });
 function setWorld(w){world=w; if(w==='water'&&wimg){const d=wimg.data;for(let i=3;i<d.length;i+=4)d[i]=255;}store.set('slc_world',w);$('wMeadow').classList.toggle('on',w==='meadow');$('wWater').classList.toggle('on',w==='water');
-  if(wa){wa.fill(0);wb.fill(0);hA.fill(0);hB.fill(0);fO.fill(0);fN.fill(0);gF.fill(0);gK.fill(0);GBx.fill(0);GBy.fill(0);GVx.fill(0);GVy.fill(0);PW.fill(0);BM.fill(0);GOV.length=0;} waterPrimed=false;}
+  if(wa){wa.fill(0);wb.fill(0);hA.fill(0);hB.fill(0);fO.fill(0);fN.fill(0);gF.fill(0);gK.fill(0);GBx.fill(0);GBy.fill(0);GVx.fill(0);GVy.fill(0);PW.fill(0);BM.fill(0);BMS.fill(0);GOV.length=0;} waterPrimed=false;}
 $('wMeadow').addEventListener('click',()=>setWorld('meadow')); $('wWater').addEventListener('click',()=>setWorld('water'));
 setWorld(world);
 function refreshMenu(){
