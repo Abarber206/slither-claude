@@ -365,8 +365,8 @@ const GD=16, GM=5, GV=3, GPX=112, GSPR=[];
     const roots=[['#1f4416','#25501a','#2a591d'],['#234a17','#2b561c','#30601f'],['#1c3e14','#224a18','#28541b']][v];
     const tips=mi>=3?[['#456f2b','#4e7a31','#557f36'],['#4b7830','#558437','#5c8c3b'],['#3f6828','#48722e','#4f7a33']][v]:[['#5f9a3b','#6ca744','#79b24c'],['#69a641','#77b34a','#86bf53'],['#558d35','#62993d','#6ea545']][v];
     const blades=[];
-    for(let k=0;k<18;k++){
-      const rad0=Math.sqrt(r())*26,th=r()*TAU,bx=o+Math.cos(th)*rad0,by=o+Math.sin(th)*rad0,spread=(r()-.5)*(1.3-mag*.9),a=ang+spread,full=18+r()*26;
+    for(let k=0;k<26;k++){
+      const rad0=Math.sqrt(r())*26,th=r()*TAU,bx=o+Math.cos(th)*rad0,by=o+Math.sin(th)*rad0,spread=(r()-.5)*(.5+(1-mag)*4.6),a=ang+spread,full=18+r()*26;
       const len=full*(.62+.38*mag),ca=Math.cos(a),sa=Math.sin(a),tx=bx+ca*len,ty=by+sa*len;
       const curl=(r()-.5)*len*.45,mx=bx+ca*len*.5-sa*curl,my=by+sa*len*.5+ca*curl,w=.75+r()*.8,px=-sa*w,py=ca*w;
       blades.push({bx,by,tx,ty,mx,my,px,py,k});
@@ -383,10 +383,10 @@ const GD=16, GM=5, GV=3, GPX=112, GSPR=[];
 })();
 const lawnPat=(()=>{const S=256,c=mkc(S),g=c.getContext('2d');g.fillStyle='#2a5419';g.fillRect(0,0,S,S);
   const cols=['#2c5a1b','#356921','#3f7627','#4a852e','#579436','#64a23d'];
-  for(let k=0;k<5200;k++){const x=Math.random()*S,y=Math.random()*S,a=.65+rnd(-.6,.6),l=rnd(5,12),w=rnd(.6,1.2);g.strokeStyle=cols[Math.random()*6|0];g.lineWidth=w;g.lineCap='round';
+  for(let k=0;k<5200;k++){const x=Math.random()*S,y=Math.random()*S,a=Math.random()*TAU,l=rnd(4,9),w=rnd(.6,1.2);g.strokeStyle=cols[Math.random()*6|0];g.lineWidth=w;g.lineCap='round';
     for(const ox of [-S,0,S])for(const oy of [-S,0,S]){if(x+ox<-14||x+ox>S+14||y+oy<-14||y+oy>S+14)continue;g.beginPath();g.moveTo(x+ox,y+oy);g.lineTo(x+ox+Math.cos(a)*l,y+oy+Math.sin(a)*l);g.stroke();}}
   return ctx.createPattern(c,'repeat');})();
-const TS0=27;   // grass lives in the world: fixed spacing and size, so it scales naturally with zoom
+const TS0=20;   // grass lives in the world: fixed spacing and size, so it scales naturally with zoom
 let grassQ=1, fpsAcc=0, fpsN=0;
 function tuneGrass(dt){ // keep frame rate smooth on slower devices by thinning grass a little
   fpsAcc+=dt; fpsN++; if(fpsAcc<2) return; const avg=fpsAcc/fpsN*1000; fpsAcc=0; fpsN=0;
@@ -397,11 +397,11 @@ function drawMeadow(){
   ctx.fillStyle=ground; ctx.fillRect(vx0,vy0,vx1-vx0,vy1-vy0);
   // grass has a real size in the world. Close up you see every tuft; as you zoom out the tufts get small,
   // thin out one by one (stable per tuft, no popping) and a distant lawn texture fades in underneath.
-  const S=TS0, size=S*3.9, pad=size, tpx=size*z;
+  const S=TS0, size=27*3.9, pad=size, tpx=size*z;
   const lawnA=clamp((50-tpx)/24,0,1);
   if(lawnA>0){ctx.globalAlpha=lawnA; ctx.fillStyle=lawnPat; ctx.fillRect(vx0,vy0,vx1-vx0,vy1-vy0); ctx.globalAlpha=1;}
   const tuftA=clamp((tpx-15)/14,0,1);
-  const target=Math.max(10,Math.sqrt(W*H/(3200*grassQ))), keep=Math.min(1,(S*z/target)**2);
+  const target=Math.max(10,Math.sqrt(W*H/(4600*grassQ))), keep=Math.min(1,(S*z/target)**2);
   if(tuftA>0){
   const i0=Math.floor((vx0-pad)/S),i1=Math.ceil((vx1+pad)/S),j0=Math.floor((vy0-pad)/S),j1=Math.ceil((vy1+pad)/S);
   const t=clock, wang=.65+Math.sin(t*.11)*.45, wcx=Math.cos(wang), wcy=Math.sin(wang), R2=(R-20)*(R-20), DQ=GD/TAU;
@@ -411,12 +411,12 @@ function drawMeadow(){
     const h1=GH(i,j,1),h2=GH(i,j,2),h3=GH(i,j,3);
     const x=(i+h1*1.6-.3)*S, y=(j+h2*1.6-.3)*S; if(x*x+y*y>R2) continue;
     // rolling gusts sweep across the field
-    const along=x*wcx+y*wcy, gust=Math.sin(along*.0021-t*1.3+h3*1.5)*.6+Math.sin(along*.0009-t*.6+y*.0007)*.4, wm=.15+.08*gust+h1*.05;
-    let bx=wcx*wm, by=wcy*wm;
+    const along=x*wcx+y*wcy, gust=Math.sin(along*.0021-t*1.3+h3*1.5)*.6+Math.sin(along*.0009-t*.6+y*.0007)*.4, wm=.06*gust+.02, ra=GH(i,j,5)*TAU, rm=.1+h2*.14;
+    let bx=Math.cos(ra)*rm+wcx*wm, by=Math.sin(ra)*rm+wcy*wm;
     const sx=(W/2+(x-cam.x)*z)/WC+1+wShX, sy=(H/2+(y-cam.y)*z)/WC+1+wShY, gx=sx|0, gy=sy|0;
     if(gx>0&&gy>0&&gx<gw-1&&gy<gh-1){const c=gy*gw+gx, fx=GBx[c], fy=GBy[c], fm=Math.min(1,Math.hypot(fx,fy)*1.3); bx=bx*(1-fm)+fx; by=by*(1-fm)+fy;}
     const m=Math.hypot(bx,by), mi=m<.22?0:m<.43?1:m<.64?2:m<.85?3:4;
-    let di=Math.round(Math.atan2(by,bx)*DQ+(h3-.5)*1.4); di=((di%GD)+GD)%GD;
+    let di=Math.round(Math.atan2(by,bx)*DQ); di=((di%GD)+GD)%GD;
     const sz=size*(.72+h3*.6), hf=sz/2;
     if(fa<.999) ctx.globalAlpha=fa; else if(ctx.globalAlpha!==1) ctx.globalAlpha=1;
     ctx.drawImage(GSPR[((h1*3|0)*GM+mi)*GD+di],x-hf,y-hf,sz,sz);
