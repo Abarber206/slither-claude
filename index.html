@@ -464,6 +464,7 @@ function drawMeadow(){
   }
   ctx.globalAlpha=1;
   }
+  drawScrapes();
   // pressed-down groove over the blades: flattened grass reads darker until it springs back
   {const d=wimg.data; for(let y=0;y<gh;y++){let i=y*gw,p=i*4; for(let x=0;x<gw;x++,i++,p+=4){const f=gF[i];
       if(f<.24){d[p+3]=0;continue;} const e=Math.min(1,(f-.24)/.3); d[p]=18;d[p+1]=24;d[p+2]=8;d[p+3]=e*e*(3-2*e)*(150+60*clamp((gK[i]-.974)/.0195,0,1));}}
@@ -818,7 +819,7 @@ function step(dt){
   const dying=[];
   for(const s of snakes){ if(s.dead||s.remote) continue; const k=collide(s); if(k!==-2) dying.push([s,k]); }
   for(const [s,k] of dying) kill(s,k);
-  updatePellets(dt); updateCritters(dt); updatePads(dt);
+  updatePellets(dt); updateCritters(dt); updatePads(dt); updateScrapes();
   if(worldRole!=='follower'||pendingSwap){
     let bots=0; for(const s of snakes) if(!s.player&&!s.remote&&!s.gone) bots++;
     for(let i=0;i<snakes.length;i++){const s=snakes[i];
@@ -915,6 +916,34 @@ function drawReeds(){
     for(let i=0;i<stalk.length;i+=5){ if(stalk[i+4]!==ci) continue; const bx=stalk[i],by=stalk[i+1],tx=stalk[i+2],ty=stalk[i+3]; ctx.moveTo(bx,by); ctx.quadraticCurveTo(bx+(tx-bx)*.5+(ty-by)*.04,by+(ty-by)*.5-(tx-bx)*.04,tx,ty);} ctx.stroke();}
   ctx.strokeStyle='#5b3a1f'; ctx.lineWidth=5.5; ctx.beginPath(); for(let i=0;i<heads.length;i+=5){ctx.moveTo(heads[i],heads[i+1]); ctx.lineTo(heads[i]+(heads[i+2]-heads[i])*.7,heads[i+1]+(heads[i+3]-heads[i+1])*.7);} ctx.stroke();
   ctx.strokeStyle='rgba(200,150,100,.35)'; ctx.lineWidth=1.6; ctx.beginPath(); for(let i=0;i<heads.length;i+=5){ctx.moveTo(heads[i]-1,heads[i+1]-1); ctx.lineTo(heads[i]-1+(heads[i+2]-heads[i])*.6,heads[i+1]-1+(heads[i+3]-heads[i+1])*.6);} ctx.stroke();
+}
+
+/* ---------- massive snakes scrape the meadow down to bare dirt; grass grows back as the path fades ---------- */
+const SCR=[];
+function updateScrapes(){
+  if(world!=='meadow'){SCR.length=0;return;}
+  for(const s of snakes){ if(s.dead){s.scx=undefined;continue;} const r=s.rs||s.r; if(r<30){s.scx=undefined;continue;}
+    if(s.scx===undefined){s.scx=s.x;s.scy=s.y;continue;}
+    const dx=s.x-s.scx, dy=s.y-s.scy, d2=dx*dx+dy*dy; if(d2<(r*.45)**2) continue;
+    if(d2>(r*6)**2){s.scx=s.x;s.scy=s.y;continue;}
+    SCR.push({x1:s.scx,y1:s.scy,x2:s.x,y2:s.y,w:r*(2.05+.35*clamp((r-30)/60,0,1)),k:.5+.5*clamp((r-30)/50,0,1),t:clock,life:22+r*.12+Math.min(60,s.n*s.spacing/SPEED)});
+    s.scx=s.x; s.scy=s.y; }
+  let w=0; for(const g of SCR) if(clock-g.t<g.life) SCR[w++]=g; SCR.length=w; if(SCR.length>6000) SCR.splice(0,SCR.length-6000);
+}
+function drawScrapes(){
+  if(!SCR.length) return;
+  const B=8, buckets=[]; for(let q=0;q<B;q++) buckets.push([]);
+  for(const g of SCR){ const m=g.w; if(Math.max(g.x1,g.x2)+m<vx0||Math.min(g.x1,g.x2)-m>vx1||Math.max(g.y1,g.y2)+m<vy0||Math.min(g.y1,g.y2)-m>vy1) continue;
+    const age=clock-g.t, a=g.k*Math.min(1,(g.life-age)/8); if(a<=.02) continue; buckets[Math.min(B-1,Math.floor(a*B))].push(g); }
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  for(let q=0;q<B;q++){ const L=buckets[q]; if(!L.length) continue; const a=(q+.5)/B;
+    // churned soil rim, then the bare dirt itself
+    for(const [wm,style,al] of [[1.22,'rgba(26,17,8,1)',.32],[1,ground,.95],[.45,'rgba(20,13,6,1)',.18]]){
+      ctx.globalAlpha=a*al; ctx.strokeStyle=style;
+      // group by width so one stroke call covers many segments
+      L.sort((u,v)=>u.w-v.w); let i=0;
+      while(i<L.length){ const w0=L[i].w; ctx.lineWidth=w0*wm; ctx.beginPath(); while(i<L.length&&L[i].w<w0*1.15){const g=L[i++]; ctx.moveTo(g.x1,g.y1); ctx.lineTo(g.x2,g.y2);} ctx.stroke(); } } }
+  ctx.globalAlpha=1;
 }
 
 /* ---------- critters: crickets & mice in the meadow, frogs & fish in the water. They flee; eat them for bonus growth ---------- */
