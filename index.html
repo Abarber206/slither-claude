@@ -343,59 +343,57 @@ function grassStep(){
   PW.fill(0);
 }
 const GH=(i,j,k)=>{let h=Math.imul(i,374761393)^Math.imul(j,668265263)^Math.imul(k,2147483647);h=Math.imul(h^(h>>>13),1274126177);return ((h^(h>>>16))>>>0)/4294967296;};
-const ground=(()=>{const S=256,c=mkc(S),g=c.getContext('2d');g.fillStyle='#2c5a18';g.fillRect(0,0,S,S);
+const ground=(()=>{const S=256,c=mkc(S),g=c.getContext('2d');g.fillStyle='#14290c';g.fillRect(0,0,S,S);
   const blot=(x,y,r,tone,a)=>{const gr=g.createRadialGradient(x,y,0,x,y,r);gr.addColorStop(0,tone+a+')');gr.addColorStop(1,tone+'0)');g.fillStyle=gr;
     for(const ox of [-S,0,S])for(const oy of [-S,0,S]){g.save();g.translate(ox,oy);g.fillRect(x-r,y-r,r*2,r*2);g.restore();}};
-  for(let k=0;k<120;k++) blot(Math.random()*S,Math.random()*S,rnd(10,34),Math.random()<.5?'rgba(96,150,48,':'rgba(22,52,12,',rnd(.25,.5));
-  const cols=['#2f6119','#386d1e','#427a23','#4d8729','#5c9632','#6ea53c'];
-  const blade=(x,y,a,l,w,col)=>{const c=Math.cos(a),s2=Math.sin(a),px=-s2*w,py=c*w,tx=x+c*l,ty=y+s2*l,bend=(Math.random()-.5)*l*.35,mx=x+c*l*.5-s2*bend,my=y+s2*l*.5+c*bend;
-    g.fillStyle=col;g.beginPath();g.moveTo(x+px,y+py);g.quadraticCurveTo(mx+px*.5,my+py*.5,tx,ty);g.quadraticCurveTo(mx-px*.5,my-py*.5,x-px,y-py);g.closePath();g.fill();};
-  for(let k=0;k<7000;k++){const x=Math.random()*S,y=Math.random()*S,a=.65+rnd(-.45,.45),l=rnd(7,16),w=rnd(.7,1.3),col=cols[Math.min(5,(Math.random()*6)|0)];
-    for(const ox of [-S,0,S])for(const oy of [-S,0,S]){if(x+ox<-20||x+ox>S+20||y+oy<-20||y+oy>S+20)continue;blade(x+ox,y+oy,a,l,w,col);}}
+  for(let k=0;k<120;k++) blot(Math.random()*S,Math.random()*S,rnd(10,34),Math.random()<.5?'rgba(40,70,20,':'rgba(6,14,4,',rnd(.3,.55));
   return ctx.createPattern(c,'repeat');})();
-const BL=[[],[],[],[]], BT=[[],[],[],[]];
-const BCOL=['#3b711f','#427b23','#3a6b1e','#335f1a'], TCOL=['#76b443','#83bf4b','#6ea33d','#5f9135'];
+// real grass: every spot of the meadow is a tuft of blades. Tufts are pre-drawn in 16 lean directions x 5 bend
+// amounts x 2 shades, so each frame just picks the tuft matching its wind + push and stamps it (fast drawImage).
+const GD=16, GM=5, GV=3, GPX=112, GSPR=[];
+(function buildGrass(){
+  for(let v=0;v<GV;v++)for(let mi=0;mi<GM;mi++)for(let d=0;d<GD;d++){
+    const c=mkc(GPX),g=c.getContext('2d'),r=rng32(v*7919+mi*131+d*17+1),ang=d/GD*TAU,mag=.12+mi*.21,o=GPX/2;
+    const roots=[['#1f4416','#25501a','#2a591d'],['#234a17','#2b561c','#30601f'],['#1c3e14','#224a18','#28541b']][v];
+    const tips=mi>=3?[['#456f2b','#4e7a31','#557f36'],['#4b7830','#558437','#5c8c3b'],['#3f6828','#48722e','#4f7a33']][v]:[['#5f9a3b','#6ca744','#79b24c'],['#69a641','#77b34a','#86bf53'],['#558d35','#62993d','#6ea545']][v];
+    for(let k=0;k<18;k++){
+      const rad0=Math.sqrt(r())*26,th=r()*TAU,bx=o+Math.cos(th)*rad0,by=o+Math.sin(th)*rad0,spread=(r()-.5)*(1.3-mag*.9),a=ang+spread,full=18+r()*26;
+      const len=full*(.32+.68*mag),ca=Math.cos(a),sa=Math.sin(a),tx=bx+ca*len,ty=by+sa*len;
+      const curl=(r()-.5)*len*.45,mx=bx+ca*len*.5-sa*curl,my=by+sa*len*.5+ca*curl,w=.75+r()*.8,px=-sa*w,py=ca*w;
+      const gr=g.createLinearGradient(bx,by,tx,ty); gr.addColorStop(0,roots[k%3]); gr.addColorStop(1,tips[(k+mi)%3]);
+      g.fillStyle=gr; g.beginPath(); g.moveTo(bx+px,by+py); g.quadraticCurveTo(mx+px*.5,my+py*.5,tx,ty); g.quadraticCurveTo(mx-px*.5,my-py*.5,bx-px,by-py); g.closePath(); g.fill();
+    }
+    GSPR[(v*GM+mi)*GD+d]=c;
+  }
+})();
+let grassQ=1, fpsAcc=0, fpsN=0;
+function tuneGrass(dt){ // keep frame rate smooth on slower devices by thinning grass a little
+  fpsAcc+=dt; fpsN++; if(fpsAcc<2) return; const avg=fpsAcc/fpsN*1000; fpsAcc=0; fpsN=0;
+  if(avg>21&&grassQ>.35) grassQ=Math.max(.35,grassQ*.82); else if(avg<14&&grassQ<1) grassQ=Math.min(1,grassQ*1.12);
+}
 function drawMeadow(){
   const z=cam.z;
   ctx.fillStyle=ground; ctx.fillRect(vx0,vy0,vx1-vx0,vy1-vy0);
-  // fixed blade budget (~1100 on screen at any zoom), thinned evenly by a per-blade hash so it stays stable
-  const target=Math.max(9,Math.sqrt(W*H/1100));
-  let S=18; while(S*z<target*.72) S*=2;
-  const keep=Math.min(1,(S*z/target)**2);
-  const i0=Math.floor(vx0/S)-1,i1=Math.ceil(vx1/S)+1,j0=Math.floor(vy0/S)-1,j1=Math.ceil(vy1/S)+1;
-  for(const b of BL) b.length=0; for(const b of BT) b.length=0;
-  const t=clock, wang=.65+Math.sin(t*.11)*.45, wcx=Math.cos(wang), wcy=Math.sin(wang), R2=(R-20)*(R-20);
+  // dense lattice of tufts; spacing stays ~constant on screen (stable world lattice, thinned by hash when needed)
+  const target=Math.max(10,Math.sqrt(W*H/(3200*grassQ)));
+  let S=14; while(S*z<target*.72) S*=2;
+  const keep=Math.min(1,(S*z/target)**2), size=S*3.9, pad=size;
+  const i0=Math.floor((vx0-pad)/S),i1=Math.ceil((vx1+pad)/S),j0=Math.floor((vy0-pad)/S),j1=Math.ceil((vy1+pad)/S);
+  const t=clock, wang=.65+Math.sin(t*.11)*.45, wcx=Math.cos(wang), wcy=Math.sin(wang), R2=(R-20)*(R-20), DQ=GD/TAU;
   for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++){
     if(keep<1&&GH(i,j,4)>keep) continue;
     const h1=GH(i,j,1),h2=GH(i,j,2),h3=GH(i,j,3);
-    const x=(i+h1*.9)*S, y=(j+h2*.9)*S; if(x*x+y*y>R2) continue;
-    const L=S*(1.15+.9*h3);
-    // rolling gusts: bands of wind sweep across the field
-    const along=x*wcx+y*wcy, gust=Math.sin(along*.0042-t*2.1)*.6+Math.sin(along*.0017-t*.9+y*.0011)*.4;
-    let bx=wcx*(.16+.2*(gust*.5+.5)+h1*.06), by=wcy*(.16+.2*(gust*.5+.5)+h1*.06);
+    const x=(i+h1*1.6-.3)*S, y=(j+h2*1.6-.3)*S; if(x*x+y*y>R2) continue;
+    // rolling gusts sweep across the field
+    const along=x*wcx+y*wcy, gust=Math.sin(along*.0042-t*2.1)*.6+Math.sin(along*.0017-t*.9+y*.0011)*.4, wm=.14+.22*(gust*.5+.5)+h1*.06;
+    let bx=wcx*wm, by=wcy*wm;
     const sx=(W/2+(x-cam.x)*z)/WC+1+wShX, sy=(H/2+(y-cam.y)*z)/WC+1+wShY, gx=sx|0, gy=sy|0;
     if(gx>0&&gy>0&&gx<gw-1&&gy<gh-1){const c=gy*gw+gx, fx=GBx[c], fy=GBy[c], fm=Math.min(1,Math.hypot(fx,fy)*1.3); bx=bx*(1-fm)+fx; by=by*(1-fm)+fy;}
-    let m=Math.hypot(bx,by); const dxn=m>1e-4?bx/m:wcx, dyn=m>1e-4?by/m:wcy; if(m>1.1) m=1.1;
-    const proj=L*(.4+.18*Math.min(1,m)), tx=x+dxn*proj, ty=y+dyn*proj;
-    const curl=(h2-.5)*L*.28, cx=x+dxn*proj*.45-dyn*curl, cy=y+dyn*proj*.45+dxn*curl;
-    const bucket=m<.3?0:m<.55?1:m<.8?2:3;
-    BL[bucket].push(x,y,cx,cy,tx,ty);
-    BT[bucket].push(cx,cy,tx,ty,(cx+tx)*.5,(cy+ty)*.5);
+    const m=Math.hypot(bx,by), mi=m<.22?0:m<.43?1:m<.64?2:m<.85?3:4;
+    let di=Math.round(Math.atan2(by,bx)*DQ+(h3-.5)*1.4); di=((di%GD)+GD)%GD;
+    const sz=size*(.72+h3*.6), hf=sz/2;
+    ctx.drawImage(GSPR[((h1*3|0)*GM+mi)*GD+di],x-hf,y-hf,sz,sz);
   }
-  // tapered blades: wide root, pointed tip (filled), lighter upper half catches light
-  const bw=Math.max(.9/z,S*.075);
-  for(let b=0;b<4;b++){const A=BL[b]; if(!A.length) continue;
-    ctx.fillStyle=BCOL[b]; ctx.beginPath();
-    for(let k=0;k<A.length;k+=6){const x=A[k],y=A[k+1],cx=A[k+2],cy=A[k+3],tx=A[k+4],ty=A[k+5];
-      let px=-(ty-y),py=tx-x;const pl=Math.hypot(px,py)||1;px=px/pl*bw;py=py/pl*bw;
-      ctx.moveTo(x+px,y+py);ctx.quadraticCurveTo(cx+px*.55,cy+py*.55,tx,ty);ctx.quadraticCurveTo(cx-px*.55,cy-py*.55,x-px,y-py);ctx.closePath();}
-    ctx.fill();}
-  for(let b=0;b<4;b++){const A=BT[b]; if(!A.length) continue;
-    ctx.fillStyle=TCOL[b]; ctx.beginPath();
-    for(let k=0;k<A.length;k+=6){const x=A[k],y=A[k+1],tx=A[k+2],ty=A[k+3],cx=A[k+4],cy=A[k+5];
-      let px=-(ty-y),py=tx-x;const pl=Math.hypot(px,py)||1;px=px/pl*bw*.5;py=py/pl*bw*.5;
-      ctx.moveTo(x+px,y+py);ctx.quadraticCurveTo(cx+px*.4,cy+py*.4,tx,ty);ctx.quadraticCurveTo(cx-px*.4,cy-py*.4,x-px,y-py);ctx.closePath();}
-    ctx.fill();}
   // pressed-down groove over the blades: flattened grass reads darker until it springs back
   {const d=wimg.data; for(let y=0;y<gh;y++){let i=y*gw,p=i*4; for(let x=0;x<gw;x++,i++,p+=4){const f=gF[i];
       if(f<.24){d[p+3]=0;continue;} const e=Math.min(1,(f-.24)/.3); d[p]=14;d[p+1]=36;d[p+2]=8;d[p+3]=e*e*(3-2*e)*(150+60*clamp((gK[i]-.974)/.0195,0,1));}}
@@ -474,7 +472,7 @@ const bHead=new Int32Array(BG*BG), bNext=new Int32Array(BMAX), bX=new Float32Arr
 pHead.fill(-1); bHead.fill(-1);
 
 /* ---------- state ---------- */
-let snakes=[], pellets=[], pus=[], parts=[], player=null, leader=null, state='menu', clock=0, shake=0, uid=1;
+let marks=[], snakes=[], pellets=[], pus=[], parts=[], player=null, leader=null, state='menu', clock=0, shake=0, uid=1;
 const stats={kills:0,start:0,bestRank:99,diedAt:0,killer:null,killerPeer:null,deadId:0,lastKill:-99,streak:0,finalMass:0};
 
 /* ---------- snakes ---------- */
@@ -657,6 +655,8 @@ function kill(s,k){
   const killer=k>=0?snakes[k]:null, mass=s.mass, sk=s.skin;
   // spill orbs laid out along the exact body shape: a glowing outline of the snake
   undulate(s);
+  {const n0=s.n,st=Math.max(1,Math.ceil(n0/60)),pts=[];for(let i=0;i<n0;i+=st)pts.push(WX[i],WY[i]);pts.push(WX[n0-1],WY[n0-1]);
+   const rr0=(s.rs||s.r),life=10+Math.min(20,rr0*.35); marks.push({pts,r:rr0,life,max:life}); if(marks.length>40) marks.shift();}
   const n=s.n, rr=(s.rs||s.r), lanes=rr>9?[-.58,0,.58]:[-.45,.45], step=Math.max(1,Math.round(1.6/Math.max(.2,s.spacing/rr)*.5));
   const spots=[];
   for(let i=0;i<n;i+=step){const a=i>0?i-1:0,b=i<n-1?i+1:i;let tx=WX[a]-WX[b],ty=WY[a]-WY[b];const tl=Math.hypot(tx,ty)||1;tx/=tl;ty/=tl;
@@ -703,6 +703,7 @@ function step(dt){
   }
   if(snakes.some(s=>s.gone)){snakes=snakes.filter(s=>!s.gone);for(let i=0;i<snakes.length;i++)snakes[i].slot=i;buildBodyGrid();}
   while(pus.length<NPU) spawnPU();
+  for(let i=marks.length-1;i>=0;i--){marks[i].life-=dt; if(marks[i].life<=0) marks.splice(i,1);}
   const damp=Math.exp(-dt*4); let w=0;
   for(const p of parts){p.life-=dt; if(p.life<=0) continue; p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=damp;p.vy*=damp;parts[w++]=p;}
   parts.length=w;
@@ -1469,6 +1470,13 @@ function render(){
   if(player&&!player.dead&&state==='play'){const d=R-Math.hypot(player.x,player.y);if(d<450)edge+=(1-d/450)*.5*(.6+.4*Math.sin(clock*10));}
   ctx.beginPath();ctx.arc(0,0,R,0,TAU);ctx.lineWidth=30;ctx.strokeStyle=`rgba(217,119,87,${edge})`;ctx.stroke();
   ctx.lineWidth=4;ctx.strokeStyle='rgba(240,150,120,.9)';ctx.stroke();
+  // dark spots where snakes died, fading away
+  if(marks.length){ ctx.lineCap='round'; ctx.lineJoin='round';
+    for(const mk of marks){ const P=mk.pts, f=mk.life/mk.max, a=Math.min(1,f*1.6)*Math.min(1,(mk.max-mk.life)*4);
+      let vis=false; for(let i=0;i<P.length;i+=8){if(P[i]>vx0-mk.r*3&&P[i]<vx1+mk.r*3&&P[i+1]>vy0-mk.r*3&&P[i+1]<vy1+mk.r*3){vis=true;break;}} if(!vis) continue;
+      const path=()=>{ctx.beginPath();ctx.moveTo(P[0],P[1]);for(let i=2;i<P.length;i+=2)ctx.lineTo(P[i],P[i+1]);};
+      ctx.strokeStyle=`rgba(10,20,6,${.18*a})`; ctx.lineWidth=mk.r*3.4; path(); ctx.stroke();
+      ctx.strokeStyle=`rgba(8,14,4,${.32*a})`; ctx.lineWidth=mk.r*2.1; path(); ctx.stroke(); } }
   // pellets
   ctx.globalCompositeOperation='lighter';
   for(const p of pellets){
@@ -1682,7 +1690,7 @@ function frame(t){
   miniT-=dt; if(miniT<=0){miniT=.1;drawMini();}
   if(state==='dying'&&clock-stats.diedAt>1.5) showOver();
   shake*=Math.exp(-dt*9); if(shake<.2) shake=0;
-  boostAudio(); netSend(false); worldSend(); render();
+  boostAudio(); netSend(false); worldSend(); if(world==='meadow') tuneGrass(dt); render();
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
