@@ -387,7 +387,7 @@ const lawnPat=(()=>{const S=256,c=mkc(S),g=c.getContext('2d');g.fillStyle='#2a54
     for(const ox of [-S,0,S])for(const oy of [-S,0,S]){if(x+ox<-14||x+ox>S+14||y+oy<-14||y+oy>S+14)continue;g.beginPath();g.moveTo(x+ox,y+oy);g.lineTo(x+ox+Math.cos(a)*l,y+oy+Math.sin(a)*l);g.stroke();}}
   return ctx.createPattern(c,'repeat');})();
 const TS0=20;   // grass lives in the world: fixed spacing and size, so it scales naturally with zoom
-let grassQ=1, fpsAcc=0, fpsN=0;
+let grassQ=1, fpsAcc=0, fpsN=0, gGrow=0;
 function tuneGrass(dt){ // keep frame rate smooth on slower devices by thinning grass a little
   fpsAcc+=dt; fpsN++; if(fpsAcc<2) return; const avg=fpsAcc/fpsN*1000; fpsAcc=0; fpsN=0;
   if(avg>21&&grassQ>.35) grassQ=Math.max(.35,grassQ*.82); else if(avg<14&&grassQ<1) grassQ=Math.min(1,grassQ*1.12);
@@ -398,16 +398,19 @@ function drawMeadow(){
   // grass has a real size in the world. Close up you see every tuft; as you zoom out the tufts get small,
   // thin out one by one (stable per tuft, no popping) and a distant lawn texture fades in underneath.
   const S=TS0, size=27*3.9, pad=size, tpx=size*z;
-  const lawnA=clamp((50-tpx)/24,0,1);
+  // how grown-in the meadow is depends on YOUR size (not zoom): small = mostly bare dirt with scattered tufts,
+  // big = thick grass over a green lawn, no dirt anywhere
+  if(player&&!player.dead){const rr=player.rs||player.r; gGrow+=(clamp((rr-7)/26,0,1)-gGrow)*.03;}
+  const gg=gGrow*gGrow*(3-2*gGrow), dens=.22+.78*gg, lawnA=Math.max(clamp((50-tpx)/24,0,1),clamp((gGrow-.3)/.55,0,1));
   if(lawnA>0){ctx.globalAlpha=lawnA; ctx.fillStyle=lawnPat; ctx.fillRect(vx0,vy0,vx1-vx0,vy1-vy0); ctx.globalAlpha=1;}
   const tuftA=clamp((tpx-15)/14,0,1);
   const target=Math.max(10,Math.sqrt(W*H/(4600*grassQ))), keep=Math.min(1,(S*z/target)**2);
   if(tuftA>0){
   const i0=Math.floor((vx0-pad)/S),i1=Math.ceil((vx1+pad)/S),j0=Math.floor((vy0-pad)/S),j1=Math.ceil((vy1+pad)/S);
-  const t=clock, wang=.65+Math.sin(t*.11)*.45, wcx=Math.cos(wang), wcy=Math.sin(wang), R2=(R-20)*(R-20), DQ=GD/TAU, PERS=2/Math.hypot(W,H);
+  const t=clock, wang=.65+Math.sin(t*.11)*.45, wcx=Math.cos(wang), wcy=Math.sin(wang), R2=(R-20)*(R-20), DQ=GD/TAU, PERS=2/Math.hypot(W,H), kd=keep*dens;
   for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++){
-    const h4=GH(i,j,4); if(h4>keep) continue;
-    const fa=(h4>keep*.75?(keep-h4)/(keep*.25):1)*tuftA;
+    const h4=GH(i,j,4); if(h4>kd) continue;
+    const fa=(h4>kd*.75?(kd-h4)/(kd*.25):1)*tuftA;
     const h1=GH(i,j,1),h2=GH(i,j,2),h3=GH(i,j,3);
     const x=(i+h1*1.6-.3)*S, y=(j+h2*1.6-.3)*S; if(x*x+y*y>R2) continue;
     // rolling gusts sweep across the field
@@ -1680,7 +1683,7 @@ function startGame(){
   const s=newSnake({name,skin:currentSkin(),mass:20,player:true});
   const idx=player?snakes.indexOf(player):-1;
   if(idx>=0) snakes[idx]=s; else snakes.push(s);
-  player=s; cam.x=s.x; cam.y=s.y; wLX=cam.x; wLY=cam.y; wa.fill(0); wb.fill(0); hA.fill(0); hB.fill(0); fO.fill(0); fN.fill(0); gF.fill(0); gK.fill(0); GBx.fill(0); GBy.fill(0); GVx.fill(0); GVy.fill(0); waterPrimed=false;
+  player=s; gGrow=0; cam.x=s.x; cam.y=s.y; wLX=cam.x; wLY=cam.y; wa.fill(0); wb.fill(0); hA.fill(0); hB.fill(0); fO.fill(0); fN.fill(0); gF.fill(0); gK.fill(0); GBx.fill(0); GBy.fill(0); GVx.fill(0); GVy.fill(0); waterPrimed=false;
   Object.assign(stats,{kills:0,start:clock,bestRank:99,killer:null,killerPeer:null,streak:0,lastKill:-99,finalMass:0});
   state='play'; menuEl.classList.add('hidden'); overEl.classList.add('hidden'); hudEl.classList.remove('hidden');
   feedEl.innerHTML=''; hudT=0; netSend(true);
