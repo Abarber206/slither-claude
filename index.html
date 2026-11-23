@@ -45,6 +45,10 @@ canvas#c{display:block;position:fixed;inset:0;width:100%;height:100%}
 #mute{position:absolute;right:calc(14px + env(safe-area-inset-right));bottom:calc(132px + env(safe-area-inset-bottom));width:40px;height:40px;border-radius:50%;border:1px solid rgba(243,235,221,.15);background:rgba(10,10,12,.55);color:var(--cream);font-size:16px;pointer-events:auto}
 body.mouse #boost{display:none}
 body.mouse #mute{bottom:calc(16px + env(safe-area-inset-bottom))}
+.zb{position:absolute;right:calc(14px + env(safe-area-inset-right));width:40px;height:40px;border-radius:50%;border:1px solid rgba(243,235,221,.15);background:rgba(10,10,12,.55);color:var(--cream);font:600 20px system-ui,sans-serif;pointer-events:auto;line-height:1}
+#zin{bottom:calc(228px + env(safe-area-inset-bottom))}
+#zout{bottom:calc(180px + env(safe-area-inset-bottom))}
+body.mouse .zb{display:none}
 .screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:20px;background:radial-gradient(ellipse at center,rgba(6,7,10,.05),rgba(4,4,6,.6))}
 .card{width:min(360px,100%);background:var(--card);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid rgba(243,235,221,.1);border-radius:24px;padding:26px 22px 22px;text-align:center;box-shadow:0 24px 70px rgba(0,0,0,.6);animation:pop .35s ease-out}
 .logo{font:700 38px/1 Fraunces,Georgia,serif;letter-spacing:-.03em;display:flex;align-items:center;justify-content:center;gap:8px}
@@ -122,6 +126,8 @@ h2{font:700 28px/1.1 Fraunces,Georgia,serif;margin:0 0 6px;letter-spacing:-.02em
   <div id="feed"></div>
   <button id="boost" aria-label="Boost"><svg width="18" height="18" viewBox="-20 -20 40 40"><g stroke="#F3EBDD" stroke-width="5" stroke-linecap="round"><line x1="0" y1="0" x2="16" y2="0"/><line x1="0" y1="0" x2="8" y2="8"/><line x1="0" y1="0" x2="0" y2="16"/><line x1="0" y1="0" x2="-8" y2="8"/><line x1="0" y1="0" x2="-16" y2="0"/><line x1="0" y1="0" x2="-8" y2="-8"/><line x1="0" y1="0" x2="0" y2="-16"/><line x1="0" y1="0" x2="8" y2="-8"/></g></svg>BOOST</button>
   <button id="mute" aria-label="Toggle sound">♪</button>
+  <button id="zin" class="zb" aria-label="Zoom in">＋</button>
+  <button id="zout" class="zb" aria-label="Zoom out">－</button>
 </div>
 
 <div id="menu" class="screen">
@@ -1821,6 +1827,7 @@ const bUp=()=>{boostBtn=false;boostEl.classList.remove('on');};
 ['pointerup','pointercancel','lostpointercapture'].forEach(ev=>boostEl.addEventListener(ev,bUp));
 $('mute').addEventListener('pointerdown',e=>{e.stopPropagation();initAudio();toggleMute();});
 $('mute').textContent=muted?'×':'♪';
+for(const [id,f] of [['zin',1.18],['zout',1/1.18]]) $(id).addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();setZoom(zoomMul*f);});
 const isBoostKey=k=>k===' '||k==='Shift'||k==='w'||k==='W'||k==='ArrowUp';
 addEventListener('keydown',e=>{
   if(e.target&&e.target.tagName==='INPUT'){if(e.key==='Enter'){if(e.target===pCodeEl){joinParty();return;}e.target.blur();startGame();}return;}
@@ -1865,7 +1872,7 @@ function undulate(s){
 function updateCam(dt){
   const base=clamp(Math.sqrt(W*H)/820,.68,1.25);
   let tx=cam.x,ty=cam.y,tz=base,ks=2;
-  if(state==='play'&&player&&!player.dead){tx=player.x;ty=player.y;tz=clamp(Math.hypot(W,H)/2/(150+(player.rs||player.r)*30),.12,3);ks=9;}
+  if(state==='play'&&player&&!player.dead){tx=player.x;ty=player.y;tz=clamp(Math.hypot(W,H)/2/(150+(player.rs||player.r)*30),.12,3)*(inputMode==='touch'||Math.min(W,H)<600?1.35:1);ks=9;}
   else if(state==='dying'||state==='over'){tz=base*.7;}
   else if(leader){tx=leader.x;ty=leader.y;tz=base*clamp(.8-(leader.r-6)*.005,.32,.8);}
   tz*=Math.max(zoomMul,zoomMin());
