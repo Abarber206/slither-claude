@@ -1430,8 +1430,8 @@ function dayNight(){
 function drawOrbLight(){
   const z=cam.z, base=.11+.22*NIGHT;
   ctx.globalCompositeOperation='lighter'; let n=0;
-  for(const p of pellets){ if(p.x<vx0||p.x>vx1||p.y<vy0||p.y>vy1) continue; if(NIGHT<.15&&p.v<2) continue; const s=p.r*(13+9*NIGHT); if(s*z<14) continue;
-    ctx.globalAlpha=base*(p.v>=2?1:.65)*((!p.nat&&p.life<3)?p.life/3:1); ctx.drawImage(glow(p.col),p.x-s/2,p.y-s/2,s,s); if(++n>140) break; }
+  for(const p of pellets){ if(p.x<vx0||p.x>vx1||p.y<vy0||p.y>vy1) continue; if(NIGHT<.15&&p.v<2) continue; const s=Math.max(p.r*(13+9*NIGHT),30/z);
+    ctx.globalAlpha=base*(p.v>=2?1:.65)*((!p.nat&&p.life<3)?p.life/3:1); ctx.drawImage(glow(p.col),p.x-s/2,p.y-s/2,s,s); if(++n>(IS_PHONE?140:260)) break; }
   for(const u of pus){ if(u.x<vx0-200||u.x>vx1+200||u.y<vy0-200||u.y>vy1+200) continue; const s=300; ctx.globalAlpha=base*1.3; ctx.drawImage(glow(PU_COL[u.type]),u.x-s/2,u.y-s/2,s,s); }
   ctx.globalAlpha=1; ctx.globalCompositeOperation='source-over';
 }
@@ -1439,18 +1439,21 @@ const lcv=document.createElement('canvas'), lctx=lcv.getContext('2d');
 function lightPass(){
   if(state==='replay') return false;
   if(lcv.width!==ovc.width||lcv.height!==ovc.height){lcv.width=ovc.width;lcv.height=ovc.height;}
-  const g=lctx; g.setTransform(1,0,0,1,0,0); g.globalCompositeOperation='source-over'; g.clearRect(0,0,lcv.width,lcv.height);
+  const g=lctx; g.setTransform(1,0,0,1,0,0); g.globalCompositeOperation='source-over'; g.globalAlpha=1; g.fillStyle='#000'; g.fillRect(0,0,lcv.width,lcv.height);
   g.setTransform(K,0,0,K,OX,OY); g.globalCompositeOperation='lighter';
-  const pw=.55+.38*NIGHT; let n=0;
-  for(const p of pellets){ if(p.x<vx0||p.x>vx1||p.y<vy0||p.y>vy1) continue; const sz=p.r*16; if(sz*cam.z<18) continue;
+  const pw=1.1+.5*NIGHT; let n=0;
+  const lim=IS_PHONE?160:320, minS=24/cam.z;
+  for(const p of pellets){ if(p.x<vx0||p.x>vx1||p.y<vy0||p.y>vy1) continue; if(cam.z<.5&&p.v<2&&p.nat) continue; const sz=Math.max(p.r*11,minS);
     const a=pw*(p.v>=2?1:.6)*((!p.nat&&p.life<3)?p.life/3:1);
     g.globalAlpha=a; g.drawImage(glow(p.col),p.x-sz/2,p.y-sz/2,sz,sz);
-    g.globalAlpha=a*.55; const hs=p.r*5; g.drawImage(glow('#ffffff'),p.x-hs/2,p.y-hs/2,hs,hs);
-    if(++n>160) break; }
+    g.globalAlpha=a*.55; const hs=Math.max(p.r*5,minS*.3); g.drawImage(glow('#ffffff'),p.x-hs/2,p.y-hs/2,hs,hs);
+    if(++n>lim) break; }
   for(const u of pus){ if(u.x<vx0-200||u.x>vx1+200||u.y<vy0-200||u.y>vy1+200) continue; g.globalAlpha=pw*1.1; g.drawImage(glow(PU_COL[u.type]),u.x-180,u.y-180,360,360); n++; }
   if(!n) return false;
   // keep the light only where snakes/animals are
-  g.globalAlpha=1; g.setTransform(1,0,0,1,0,0); g.globalCompositeOperation='destination-in'; g.drawImage(ovc,0,0); g.globalCompositeOperation='source-over';
+  // light reflects off the skin: tint it by the scales underneath (so every scale catches it), keep it only on bodies
+  g.globalAlpha=1; g.setTransform(1,0,0,1,0,0); g.globalCompositeOperation='multiply'; g.drawImage(ovc,0,0); g.drawImage(ovc,0,0);
+  g.globalCompositeOperation='destination-in'; g.drawImage(ovc,0,0); g.globalCompositeOperation='source-over';
   return true;
 }
 function drawNightGround(){ if(NIGHT<.01) return; ctx.fillStyle=`rgba(6,12,32,${.58*NIGHT})`; ctx.fillRect(vx0-60,vy0-60,vx1-vx0+120,vy1-vy0+120); }
@@ -2342,6 +2345,7 @@ function render(){
   for(const s of order) drawSnake(s);
   if(player&&!player.dead) drawSnake(player);
   }
+  const litOK=nightOv&&lightPass();   // light reflecting off the bodies (masked before any grass is drawn over them)
   // grass right beside a body is drawn again on top, so snakes slither THROUGH the meadow (heads stay clear)
   if(world==='meadow'&&GOV.length){ctx.setTransform(K,0,0,K,OX,OY);
     const H=[]; for(const s of snakes){if(s.dead) continue; const hx=s.hx===undefined?s.x:s.hx, hy=s.hy===undefined?s.y:s.hy; if(hx<vx0-200||hx>vx1+200||hy<vy0-200||hy>vy1+200) continue; H.push(hx,hy,(s.rs||s.r)*1.2+10);}
@@ -2362,7 +2366,7 @@ function render(){
   if(nightOv){ ctx.setTransform(1,0,0,1,0,0); ctx.globalCompositeOperation='source-atop'; ctx.fillStyle=`rgba(6,12,32,${.55*NIGHT})`; ctx.fillRect(0,0,ovc.width,ovc.height);
     ctx.globalCompositeOperation='source-over';
     // orbs light the snakes like real light: additive coloured light plus a glossy hot spot, only on the bodies
-    const lit=lightPass();
+    const lit=litOK;
     ctx=mainCtx; ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(ovc,0,0);
     if(lit){ ctx.globalCompositeOperation='lighter'; ctx.drawImage(lcv,0,0); ctx.globalCompositeOperation='source-over'; }
     ctx.setTransform(K,0,0,K,OX,OY); }
