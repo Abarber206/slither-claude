@@ -1249,6 +1249,13 @@ function updateCritters(dt){
       if(T.bound) c.h=c.run>150?Math.abs(Math.sin(clock*7+c.ph))*14:0;
       if(world==='water'&&c.run>60&&Math.random()<dt*4&&inView(c.x,c.y)) ripple(c.x,c.y,T.L*.4,.35);
     }
+    // snake bodies are walls (only flyers get over them)
+    if(!(c.fly>0)){ const cr=T.L*.22*c.sc, range=cr+130, gx0=Math.max(0,((c.x-range+OFF)/BC)|0),gx1=Math.min(BG-1,((c.x+range+OFF)/BC)|0),gy0=Math.max(0,((c.y-range+OFF)/BC)|0),gy1=Math.min(BG-1,((c.y+range+OFF)/BC)|0);
+      for(let gy=gy0;gy<=gy1;gy++)for(let gx=gx0;gx<=gx1;gx++)for(let j=bHead[gy*BG+gx];j!==-1;j=bNext[j]){ const o=snakes[bO[j]]; if(!o||o.dead||c.h>(o.rs||o.r)*3) continue;
+        const lim=(o.rs||o.r)*.95+cr, dx=c.x-bX[j], dy=c.y-bY[j], d2=dx*dx+dy*dy; if(d2>=lim*lim||bI[j]<2) continue;
+        const d=Math.sqrt(d2)||1, nx=dx/d, ny=dy/d; c.x=bX[j]+nx*lim; c.y=bY[j]+ny*lim;
+        const ux=Math.cos(c.a), uy=Math.sin(c.a), dn=ux*nx+uy*ny; if(dn<0){ c.a=Math.atan2(uy-2*dn*ny,ux-2*dn*nx); }
+        const vn=c.vx*nx+c.vy*ny; if(vn<0){ c.vx-=2*vn*nx; c.vy-=2*vn*ny; } } }
     const dc=Math.hypot(c.x,c.y); if(dc>R*.95){c.x*=R*.95/dc;c.y*=R*.95/dc;c.a=Math.atan2(-c.y,-c.x);}
   }
 }
@@ -1421,9 +1428,9 @@ function dayNight(){
   NIGHT=n; DUSK=n*(1-n)*4;
 }
 function drawOrbLight(){
-  const z=cam.z, base=.31*NIGHT; if(NIGHT<.15) return;
+  const z=cam.z, base=.11+.22*NIGHT;
   ctx.globalCompositeOperation='lighter'; let n=0;
-  for(const p of pellets){ if(p.x<vx0||p.x>vx1||p.y<vy0||p.y>vy1) continue; const s=p.r*(13+9*NIGHT); if(s*z<14) continue;
+  for(const p of pellets){ if(p.x<vx0||p.x>vx1||p.y<vy0||p.y>vy1) continue; if(NIGHT<.15&&p.v<2) continue; const s=p.r*(13+9*NIGHT); if(s*z<14) continue;
     ctx.globalAlpha=base*(p.v>=2?1:.65)*((!p.nat&&p.life<3)?p.life/3:1); ctx.drawImage(glow(p.col),p.x-s/2,p.y-s/2,s,s); if(++n>140) break; }
   for(const u of pus){ if(u.x<vx0-200||u.x>vx1+200||u.y<vy0-200||u.y>vy1+200) continue; const s=300; ctx.globalAlpha=base*1.3; ctx.drawImage(glow(PU_COL[u.type]),u.x-s/2,u.y-s/2,s,s); }
   ctx.globalAlpha=1; ctx.globalCompositeOperation='source-over';
@@ -1434,7 +1441,7 @@ function lightPass(){
   if(lcv.width!==ovc.width||lcv.height!==ovc.height){lcv.width=ovc.width;lcv.height=ovc.height;}
   const g=lctx; g.setTransform(1,0,0,1,0,0); g.globalCompositeOperation='source-over'; g.clearRect(0,0,lcv.width,lcv.height);
   g.setTransform(K,0,0,K,OX,OY); g.globalCompositeOperation='lighter';
-  const pw=.38+.5*NIGHT; let n=0;
+  const pw=.55+.38*NIGHT; let n=0;
   for(const p of pellets){ if(p.x<vx0||p.x>vx1||p.y<vy0||p.y>vy1) continue; const sz=p.r*16; if(sz*cam.z<18) continue;
     const a=pw*(p.v>=2?1:.6)*((!p.nat&&p.life<3)?p.life/3:1);
     g.globalAlpha=a; g.drawImage(glow(p.col),p.x-sz/2,p.y-sz/2,sz,sz);
