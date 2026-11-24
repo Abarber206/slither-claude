@@ -104,7 +104,36 @@ h2{font:700 28px/1.1 Fraunces,Georgia,serif;margin:0 0 6px;letter-spacing:-.02em
 .chips button.on{background:rgba(217,119,87,.22);border-color:var(--coral);color:var(--cream)}
 .sk.custom{background:conic-gradient(#D97757,#E6C86E,#9DB17C,#8AB4D8,#B79CD9,#E07A8F,#D97757)!important;position:relative}
 .sk.custom::after{content:'✎';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px;text-shadow:0 1px 3px rgba(0,0,0,.6)}
-#fps{position:fixed;top:8px;left:50%;transform:translateX(-50%);font:600 12px ui-monospace,Menlo,monospace;color:#d9f0c4;background:rgba(0,0,0,.5);padding:3px 9px;border-radius:8px;z-index:30;pointer-events:none;white-space:nowrap}
+/* ---- modern dark HUD ---- */
+#hud{--glass:rgba(7,8,11,.66);--edge:rgba(255,255,255,.07)}
+#stats{text-shadow:none;background:var(--glass);-webkit-backdrop-filter:blur(14px) saturate(1.2);backdrop-filter:blur(14px) saturate(1.2);border:1px solid var(--edge);border-radius:16px;padding:10px 16px 11px;box-shadow:0 8px 28px rgba(0,0,0,.35);min-width:120px}
+#score{font:800 28px/1 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;letter-spacing:-.03em;font-variant-numeric:tabular-nums;color:#fff}
+#stats small{font-size:9.5px;letter-spacing:.22em;color:rgba(255,255,255,.4);margin-top:4px}
+#rank{font-size:11.5px;color:rgba(255,255,255,.62);margin-top:6px;font-variant-numeric:tabular-nums}
+#online{font-size:10.5px;color:#8fd19a;margin-top:3px}
+#pu{position:fixed;left:50%;transform:translateX(-50%);top:calc(12px + env(safe-area-inset-top));flex-direction:row;margin:0}
+.pill{background:var(--glass);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid currentColor;font-size:11px;letter-spacing:.04em}
+#lb{background:var(--glass);-webkit-backdrop-filter:blur(14px) saturate(1.2);backdrop-filter:blur(14px) saturate(1.2);border:1px solid var(--edge);border-radius:16px;padding:10px 12px 9px;box-shadow:0 8px 28px rgba(0,0,0,.35);min-width:170px}
+#lb h4{color:rgba(255,255,255,.45);letter-spacing:.24em;font-size:9.5px;margin-bottom:7px;display:flex;align-items:center;gap:6px}
+#lb h4::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--coral);box-shadow:0 0 8px var(--coral)}
+#lbl li{padding:2.5px 6px;margin:0 -6px;border-radius:7px;color:rgba(255,255,255,.72)}
+#lbl li span:last-child{color:rgba(255,255,255,.45)}
+#lbl li.me{background:rgba(217,119,87,.16);color:#ffb08f}
+#lbl li.me span:last-child{color:#ffb08f}
+#mini{box-shadow:0 8px 28px rgba(0,0,0,.45),0 0 0 1px var(--edge)}
+body.mouse #mini{top:auto;left:auto;right:calc(16px + env(safe-area-inset-right));bottom:calc(66px + env(safe-area-inset-bottom))}
+#feed{top:calc(48px + env(safe-area-inset-top));text-shadow:none}
+.fd{background:var(--glass);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid var(--edge);font-size:12.5px;padding:6px 13px;color:rgba(255,255,255,.85)}
+.fd.big{font:800 15px system-ui,sans-serif;letter-spacing:.02em}
+#kfeed{position:absolute;left:calc(14px + env(safe-area-inset-left));bottom:calc(16px + env(safe-area-inset-bottom));display:flex;flex-direction:column-reverse;gap:4px;align-items:flex-start;max-width:min(70vw,340px)}
+.kf{font-size:12px;padding:5px 11px;border-radius:9px;background:var(--glass);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid var(--edge);color:rgba(255,255,255,.6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;animation:kin .25s ease-out;transition:opacity .6s}
+.kf b{color:#fff;font-weight:650} .kf .sz{color:rgba(255,255,255,.42);font-variant-numeric:tabular-nums} .kf.me{border-color:rgba(217,119,87,.45)} .kf.me b{color:#ffb08f} .kf.hum b::before{content:"● ";color:#8fd19a}
+.kf.out{opacity:0}
+@keyframes kin{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:none}}
+#mute,.zb{background:var(--glass);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid var(--edge)}
+#boost{background:radial-gradient(circle at 40% 35%,rgba(217,119,87,.32),rgba(7,8,11,.72))}
+@media (max-width:520px){#stats{padding:8px 12px 9px;min-width:0}#score{font-size:24px}#lb{min-width:0;padding:8px 10px}#mini{top:calc(118px + env(safe-area-inset-top))}#kfeed{bottom:calc(132px + env(safe-area-inset-bottom))}}
+#fps{position:fixed;bottom:8px;top:auto;left:50%;transform:translateX(-50%);font:600 11px ui-monospace,Menlo,monospace;color:#cfe8c0;background:rgba(7,8,11,.66);border:1px solid rgba(255,255,255,.07);padding:3px 9px;border-radius:8px;z-index:30;pointer-events:none;white-space:nowrap}
 #rpBadge{position:fixed;top:40px;left:50%;transform:translateX(-50%);z-index:25;pointer-events:none;text-align:center;color:var(--cream);font:700 13px system-ui,sans-serif;letter-spacing:.2em}
 #rpBadge small{display:block;font:500 11px system-ui,sans-serif;letter-spacing:.05em;opacity:.65;margin-top:3px}
 #rpBadge b{color:var(--coral)}
@@ -120,10 +149,12 @@ h2{font:700 28px/1.1 Fraunces,Georgia,serif;margin:0 0 6px;letter-spacing:-.02em
 <div id="rpBadge" class="hidden">● REPLAY <b>½×</b><small id="rpWho"></small><small>tap or press any key to skip</small></div>
 
 <div id="hud" class="hidden">
-  <div id="stats"><div id="score">0</div><small>length</small><div id="rank"></div><div id="online"></div><div id="pu"></div></div>
+  <div id="stats"><div id="score">0</div><small>length</small><div id="rank"></div><div id="online"></div></div>
+  <div id="pu"></div>
   <canvas id="mini"></canvas>
   <div id="lb"><h4>Leaderboard</h4><ol id="lbl"></ol></div>
   <div id="feed"></div>
+  <div id="kfeed"></div>
   <button id="boost" aria-label="Boost"><svg width="18" height="18" viewBox="-20 -20 40 40"><g stroke="#F3EBDD" stroke-width="5" stroke-linecap="round"><line x1="0" y1="0" x2="16" y2="0"/><line x1="0" y1="0" x2="8" y2="8"/><line x1="0" y1="0" x2="0" y2="16"/><line x1="0" y1="0" x2="-8" y2="8"/><line x1="0" y1="0" x2="-16" y2="0"/><line x1="0" y1="0" x2="-8" y2="-8"/><line x1="0" y1="0" x2="0" y2="-16"/><line x1="0" y1="0" x2="8" y2="-8"/></g></svg>BOOST</button>
   <button id="mute" aria-label="Toggle sound">♪</button>
   <button id="zin" class="zb" aria-label="Zoom in">＋</button>
@@ -980,7 +1011,7 @@ function kill(s,k){
   if(killer&&killer.player) onPlayerKill(s,mass);
   else{
     if(near) tone(rnd(180,240),.18,'triangle',.06,.5);
-    if(killer&&mass>800) feed(`<b>${esc(killer.name)}</b> devoured ${esc(s.name)} <span style="opacity:.6">(${fmt(mass)})</span>`);
+    if(mass>400&&Math.random()<(mass>3000?1:.5)) kfeed(s.name,mass);
   }
 }
 function step(dt){
@@ -1514,6 +1545,9 @@ function drawNightSky(dt){
 function burst(x,y,col,n,spd,life){for(let i=0;i<n&&parts.length<500;i++){const a=Math.random()*TAU,v=spd*rnd(.2,1);parts.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:life*rnd(.5,1),max:life,col,size:rnd(8,18)});}}
 function inView(x,y){const hw=W/2/cam.z+120,hh=H/2/cam.z+120;return Math.abs(x-cam.x)<hw&&Math.abs(y-cam.y)<hh;}
 const feedEl=$('feed');
+const kfeedEl=$('kfeed');
+function kfeed(name,mass,cls){ const d=document.createElement('div'); d.className='kf '+(cls||''); d.innerHTML=`<b>${esc(name)}</b> <span class="sz">(${fmt(mass)})</span> has died`;
+  kfeedEl.prepend(d); while(kfeedEl.children.length>5) kfeedEl.lastChild.remove(); setTimeout(()=>d.classList.add('out'),4200); setTimeout(()=>d.remove(),4900); }
 function feed(html,cls){const d=document.createElement('div');d.className='fd '+(cls||'');d.innerHTML=html;feedEl.prepend(d);while(feedEl.children.length>4)feedEl.lastChild.remove();setTimeout(()=>d.classList.add('out'),2600);setTimeout(()=>d.remove(),3200);}
 function vibrate(ms){try{navigator.vibrate&&navigator.vibrate(ms)}catch(e){}}
 
@@ -1566,7 +1600,7 @@ function onPlayerEat(p){
 function onPlayerKill(s,mass){
   stats.kills++; if(player&&!player.dead) player.mass+=mass*.06+15;
   stats.streak=clock-stats.lastKill<8?stats.streak+1:1; stats.lastKill=clock;
-  feed(`You devoured <b>${esc(s.name)}</b>${s.remote&&!s.netbot?' <span style="color:#9DB17C">●</span>':''} <span style="opacity:.6">+${fmt(mass*.06+15)} now, +${fmt(mass*.8)} in orbs</span>`);
+  kfeed(s.name,mass,'me'+(s.remote&&!s.netbot?' hum':''));
   if(stats.streak>=2) feed(stats.streak===2?'Double devour!':stats.streak===3?'Triple devour!':'Unstoppable ✦','big');
   [523.25,659.25,783.99,1046.5].forEach((f,i)=>tone(f,.22,'triangle',.08,0,i*.06)); crunch(0,true);
   shake=Math.min(10,4+mass/300); vibrate(35);
@@ -1782,7 +1816,7 @@ function onRemote(peer){
     if(s&&!s.dead&&s.netId===pr.id){
       const mass=s.mass; kill(s,-1);
       if(myPeer&&pr.kb===myPeer&&player&&!player.dead&&state==='play') onPlayerKill(s,mass);
-      else if(mass>300) feed(`<span style="color:#9DB17C">●</span> <b>${esc(s.name)}</b> was devoured`);
+      else if(mass>300) kfeed(s.name,mass,'hum');
     }
     remotes.delete(peer.peer);
   } else { if(s&&!s.dead){s.dead=true;s.gone=true;} remotes.delete(peer.peer); }
