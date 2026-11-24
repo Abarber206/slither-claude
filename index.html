@@ -489,7 +489,7 @@ function drawFlowers(){
 }
 const TS0=20;
 // Firefox paints this canvas mostly on the CPU: give it a lighter grass budget (Chrome/Edge keep the full meadow)
-const IS_FF=/firefox/i.test(navigator.userAgent), GBUD=IS_FF?2200:4600;
+const IS_PHONE=matchMedia('(pointer:coarse)').matches, IS_FF=/firefox/i.test(navigator.userAgent), GBUD=IS_FF?2200:4600;
 // tall-grass patches: the same for every player (fixed seed). Snakes inside are hidden from the minimap and covered by grass.
 const TGP=(()=>{const r=rng32(424242),a=[];for(let k=0;k<44;k++){const an=r()*TAU,d=Math.sqrt(r())*R*.88;a.push({x:Math.cos(an)*d,y:Math.sin(an)*d,r:260+r()*380,ph:r()*TAU,wob:.1+r()*.14});}return a;})();
 const TGC=100, TGN=Math.ceil(2*R/TGC)+2, TGW=new Float32Array(TGN*TGN);
@@ -2324,7 +2324,7 @@ function render(){
     ctx.save();ctx.translate(u.x,u.y);ctx.rotate(clock*.8+u.ph);ctx.setLineDash([6,5]);ctx.lineWidth=2;ctx.strokeStyle=PU_COL[u.type];ctx.beginPath();ctx.arc(0,0,20,0,TAU);ctx.stroke();ctx.restore();
     drawPUIcon(u,22);
   }
-  const nightOv=NIGHT>.01||!IS_FF;
+  const nightOv=NIGHT>.01||(!IS_FF&&!IS_PHONE);
   if(nightOv){ if(ovc.width!==cvs.width||ovc.height!==cvs.height){ovc.width=cvs.width;ovc.height=cvs.height;} octx.setTransform(K,0,0,K,OX,OY); octx.clearRect(vx0-100,vy0-100,vx1-vx0+200,vy1-vy0+200); octx.setTransform(1,0,0,1,0,0); octx.clearRect(0,0,ovc.width,ovc.height); ctx=octx; ctx.setTransform(K,0,0,K,OX,OY); }
   drawCritters(state==='replay'&&rp?rpFrame().CL:null);
   // snakes: smaller first so giants pass over
