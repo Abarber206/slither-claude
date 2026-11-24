@@ -1456,15 +1456,47 @@ function lightPass(){
   g.globalCompositeOperation='destination-in'; g.drawImage(ovc,0,0); g.globalCompositeOperation='source-over';
   return true;
 }
-function drawNightGround(){ if(NIGHT<.01) return; ctx.fillStyle=`rgba(6,12,32,${.58*NIGHT})`; ctx.fillRect(vx0-60,vy0-60,vx1-vx0+120,vy1-vy0+120); }
+function drawNightGround(){}
+/* ---------- coloured lighting: ambient (by time of day) + coloured point lights, multiplied over the scene, with bloom ---------- */
+const LMS=4, lmc=document.createElement('canvas'), lmx=lmc.getContext('2d'), llc=document.createElement('canvas'), llx=llc.getContext('2d');
+function ambientRGB(){ // day white -> dusk orange -> moonlit blue
+  const d=[255,255,255], du=[255,186,140], ni=world==='water'?[70,96,150]:[30,44,88]; const t=DUSK*(1-NIGHT);
+  return [0,1,2].map(k=>{const a=d[k]+(du[k]-d[k])*t; return Math.round(a+(ni[k]-a)*NIGHT);}); }
+function applyLighting(){
+  if(NIGHT<.02&&DUSK<.06) return;
+  const w=Math.ceil(cvs.width/LMS), h=Math.ceil(cvs.height/LMS);
+  if(lmc.width!==w||lmc.height!==h){lmc.width=llc.width=w;lmc.height=llc.height=h;}
+  // 1) all the light sources, additive, in their own colours
+  const L=llx; L.setTransform(1,0,0,1,0,0); L.globalCompositeOperation='source-over'; L.globalAlpha=1; L.fillStyle='#000'; L.fillRect(0,0,w,h);
+  L.setTransform(K/LMS,0,0,K/LMS,OX/LMS,OY/LMS); L.globalCompositeOperation='lighter';
+  const strength=Math.max(NIGHT,DUSK*.6), ms=60/cam.z;
+  const lamp=(x,y,sz,col,a)=>{ if(x<vx0-sz||x>vx1+sz||y<vy0-sz||y>vy1+sz) return; L.globalAlpha=a; L.drawImage(glow(col),x-sz/2,y-sz/2,sz,sz); };
+  let n=0;
+  for(const p of pellets){ if(p.x<vx0-80||p.x>vx1+80||p.y<vy0-80||p.y>vy1+80) continue; if(p.v<2&&p.nat&&n>250) continue;
+    lamp(p.x,p.y,Math.max(p.r*26,ms),p.col,.85*((!p.nat&&p.life<3)?p.life/3:1)); if(++n>(IS_PHONE?300:700)) break; }
+  for(const u of pus) lamp(u.x,u.y,520,PU_COL[u.type],1);
+  for(const f of FF){ const b=Math.pow(.5+.5*Math.sin(clock*1.7+f.ph),3); if(b>.05) lamp(f.x,f.y,110,'#d9f27a',b*.9); }
+  for(const q of parts){ lamp(q.x,q.y,q.size*7,q.col,Math.max(0,q.life/q.max)*.5); }
+  for(const s of snakes){ if(s.dead) continue; const r=s.rs||s.r;
+    if(s.boosting||s.pu.turbo>0){ const st=Math.max(2,Math.floor(s.n/40)), col=s.skin.gc||s.skin.base; for(let i=0;i<s.n;i+=st) lamp(s.bx[i],s.by[i],r*7,col,.4); }
+    if(s===player&&state==='play') lamp(s.x,s.y,Math.max(r*16,220/cam.z),'#9fb6e8',.45); }
+  // 2) lightmap = ambient + lights
+  const M=lmx, [ar,ag,ab]=ambientRGB(); M.setTransform(1,0,0,1,0,0); M.globalCompositeOperation='source-over'; M.globalAlpha=1; M.fillStyle=`rgb(${ar},${ag},${ab})`; M.fillRect(0,0,w,h);
+  M.globalCompositeOperation='lighter'; M.globalAlpha=strength; M.drawImage(llc,0,0); M.globalCompositeOperation='source-over';
+  // 3) light the scene, then bloom
+  ctx.save(); ctx.setTransform(1,0,0,1,0,0); ctx.imageSmoothingEnabled=true;
+  ctx.globalCompositeOperation='multiply'; ctx.drawImage(lmc,0,0,cvs.width,cvs.height);
+  ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=.22*strength; ctx.drawImage(llc,0,0,cvs.width,cvs.height);
+  ctx.restore();
+}
 function drawNightSky(dt){
   if(NIGHT<.01&&DUSK<.01){FF.length=0;return;}
   ctx.setTransform(DPR,0,0,DPR,0,0);
-  if(DUSK>.01){ctx.fillStyle=`rgba(255,120,50,${.07*DUSK})`; ctx.fillRect(0,0,W,H);}
+
   if(NIGHT>.01){
     let cx=W/2,cy=H/2; if(player&&!player.dead&&state==='play'){cx=W/2+((player.hx===undefined?player.x:player.hx)-cam.x)*cam.z; cy=H/2+((player.hy===undefined?player.y:player.hy)-cam.y)*cam.z;}
     const R0=Math.min(W,H)*.22, R1=Math.hypot(W,H)*.62, g=ctx.createRadialGradient(cx,cy,R0,cx,cy,R1);
-    g.addColorStop(0,'rgba(4,8,24,0)'); g.addColorStop(1,`rgba(4,8,24,${.5*NIGHT})`); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);}
+    g.addColorStop(0,'rgba(4,8,24,0)'); g.addColorStop(1,`rgba(4,8,24,${.3*NIGHT})`); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);}
   ctx.setTransform(K,0,0,K,OX,OY);
   // fireflies drift around the camera
   const want=NIGHT>.15?Math.round(55*NIGHT):0, hw=W/2/cam.z, hh=H/2/cam.z;
@@ -2363,13 +2395,14 @@ function render(){
   if(world==='meadow'&&TOV.length&&state!=='replay'&&player&&!player.dead){ let inTall=false; const st=Math.max(1,player.n>>3); for(let i=0;i<player.n;i+=st) if(tallAt(player.bx[i],player.by[i])>.3){inTall=true;break;}
     if(inTall) drawSnake(player,.22,true); }
   if(world==='water') drawReeds();
-  if(nightOv){ ctx.setTransform(1,0,0,1,0,0); ctx.globalCompositeOperation='source-atop'; ctx.fillStyle=`rgba(6,12,32,${.55*NIGHT})`; ctx.fillRect(0,0,ovc.width,ovc.height);
+  if(nightOv){ ctx.setTransform(1,0,0,1,0,0); ctx.globalCompositeOperation='source-atop'; ctx.fillStyle='rgba(0,0,0,0)'; ctx.fillRect(0,0,ovc.width,ovc.height);
     ctx.globalCompositeOperation='source-over';
     // orbs light the snakes like real light: additive coloured light plus a glossy hot spot, only on the bodies
     const lit=litOK;
     ctx=mainCtx; ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(ovc,0,0);
     if(lit){ ctx.globalCompositeOperation='lighter'; ctx.drawImage(lcv,0,0); ctx.globalCompositeOperation='source-over'; }
     ctx.setTransform(K,0,0,K,OX,OY); }
+  applyLighting();
   drawNightSky(Math.min(.05,rDt));
   // labels
   ctx.setTransform(K,0,0,K,OX,OY);
