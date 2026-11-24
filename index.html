@@ -936,7 +936,7 @@ function kill(s,k){
   for(let i=0;i<n;i+=step){const a=i>0?i-1:0,b=i<n-1?i+1:i;let tx=WX[a]-WX[b],ty=WY[a]-WY[b];const tl=Math.hypot(tx,ty)||1;tx/=tl;ty/=tl;
     const t=n-1-i, tailLen=Math.max(6,n*.3), taper=t<tailLen?.3+.7*Math.pow(t/tailLen,.6):1;
     for(const L of lanes) spots.push([WX[i]-ty*L*rr*taper, WY[i]+tx*L*rr*taper, i, L]);}
-  const cap=Math.min(spots.length,900), total=Math.max(12,mass*.8), stp=spots.length/cap, wts=[]; let wsum=0;
+  const cap=Math.min(spots.length,500), total=Math.max(12,mass*.8), stp=spots.length/cap, wts=[]; let wsum=0;
   for(let q=0;q<cap;q++){const w=.3+Math.pow(Math.random(),2.4)*2.6; wts.push(w); wsum+=w;}
   for(let q=0;q<cap;q++){const sp=spots[Math.floor(q*stp)], a=Math.random()*TAU, jv=rnd(2,9), v=total*wts[q]/wsum;
     const ph=(sp[2]%sk.cyc)/sk.cyc, stripe=sk.pat==='bands'?ph<.3:sk.pat==='coral'?((ph*12|0)===7):sp[3]===0;
@@ -1103,13 +1103,13 @@ function drawScrapes(){
 const CRIT=[];
 // prey that matches your size. minR: how big a snake must be to eat it. hurt: what it does to snakes smaller than hurtR.
 const CR={
- cricket:{tier:1,v:7,L:13,flee:110,hop:1,minR:0}, mouse:{tier:1,v:18,L:24,flee:150,run:300,minR:0},
- frog:{tier:1,v:11,L:17,flee:120,hop:1,minR:0}, fish:{tier:1,v:16,L:22,flee:140,run:320,minR:0},
- rabbit:{tier:2,v:60,L:40,flee:230,hop:1,hopSp:340,minR:13,name:'rabbit'}, bird:{tier:2,v:45,L:30,flee:210,run:110,fly:1,minR:12,name:'bird'},
- hedgehog:{tier:2,v:70,L:32,flee:0,run:28,curl:1,minR:17,hurt:'prick',hurtR:17,name:'hedgehog'},
- duck:{tier:2,v:55,L:36,flee:210,run:140,fly:1,minR:13,name:'duck'}, crab:{tier:2,v:65,L:30,flee:0,run:80,side:1,curl:1,minR:17,hurt:'pinch',hurtR:17,name:'crab'},
- boar:{tier:3,v:380,L:85,flee:260,run:290,minR:30,hurt:'bite',hurtR:27,charge:1,name:'wild boar'}, deer:{tier:3,v:450,L:115,flee:430,run:380,bound:1,minR:34,name:'deer'},
- turtle:{tier:3,v:360,L:80,flee:0,run:32,curl:1,minR:32,name:'turtle'}, pike:{tier:3,v:320,L:95,flee:240,run:330,minR:30,hurt:'bite',hurtR:27,charge:1,name:'pike'},
+ cricket:{tier:1,v:18,L:13,flee:170,hop:1,minR:0}, mouse:{tier:1,v:45,L:24,flee:230,run:330,minR:0},
+ frog:{tier:1,v:28,L:17,flee:180,hop:1,minR:0}, fish:{tier:1,v:40,L:22,flee:210,run:350,minR:0},
+ rabbit:{tier:2,v:150,L:40,flee:340,hop:1,hopSp:380,minR:13,name:'rabbit'}, bird:{tier:2,v:110,L:30,flee:300,run:110,fly:1,minR:12,name:'bird'},
+ hedgehog:{tier:2,v:170,L:32,flee:0,run:28,curl:1,minR:17,hurt:'prick',hurtR:17,name:'hedgehog'},
+ duck:{tier:2,v:140,L:36,flee:300,run:140,fly:1,minR:13,name:'duck'}, crab:{tier:2,v:160,L:30,flee:0,run:80,side:1,curl:1,minR:17,hurt:'pinch',hurtR:17,name:'crab'},
+ boar:{tier:3,v:900,L:85,flee:360,run:320,minR:30,hurt:'bite',hurtR:27,charge:1,name:'wild boar'}, deer:{tier:3,v:1100,L:115,flee:600,run:420,bound:1,minR:34,name:'deer'},
+ turtle:{tier:3,v:850,L:80,flee:0,run:32,curl:1,minR:32,name:'turtle'}, pike:{tier:3,v:800,L:95,flee:340,run:360,minR:30,hurt:'bite',hurtR:27,charge:1,name:'pike'},
 };
 const CTIERS={meadow:[['cricket','cricket','mouse'],['rabbit','bird','hedgehog'],['boar','deer','deer']],water:[['frog','fish'],['duck','duck','crab'],['turtle','pike']]};
 function spawnCritter(t,x,y){
@@ -1153,25 +1153,27 @@ function updateCritters(dt){
       if(s.r>=T.minR){ if(d<td){td=d;th=s;} } else if(T.hurt&&s.r<T.hurtR&&d<vd){vd=d;vic=s;} }
     // eaten?
     if(th&&!c.fly&&c.h<th.r*.9){const mx=th.x+Math.cos(th.ang)*th.r*.6,my=th.y+Math.sin(th.ang)*th.r*.6; if(Math.hypot(c.x-mx,c.y-my)<th.r*1.05+T.L*.45*c.sc){
-      if(!th.remote) th.mass+=T.v; if(th.player) onCritter(c,T); else if(inView(c.x,c.y)) burst(c.x,c.y,c.t==='mouse'||c.t==='rabbit'?'#c8b6a6':c.t==='fish'||c.t==='pike'?'#9ec7e8':'#a7c66a',6+T.tier*4,90+T.tier*40,.4);
+      if(!th.remote){ th.mass+=T.v*.6; const n=Math.min(14,4+T.tier*3), per=T.v*.4/n, cols=c.t==='mouse'||c.t==='rabbit'||c.t==='boar'||c.t==='deer'?['#E8A55A','#F3EBDD','#D97757']:c.t==='fish'||c.t==='pike'||c.t==='duck'?['#8AB4D8','#F3EBDD','#B79CD9']:['#9DB17C','#E6C86E','#F3EBDD'];
+        for(let q=0;q<n;q++){const a=q/n*TAU+Math.random()*.4, v=rnd(60,150); addPellet(c.x,c.y,per,cols[q%cols.length],false,Math.cos(a)*v,Math.sin(a)*v);} }
+      if(th.player) onCritter(c,T); else if(inView(c.x,c.y)) burst(c.x,c.y,c.t==='mouse'||c.t==='rabbit'?'#c8b6a6':c.t==='fish'||c.t==='pike'?'#9ec7e8':'#a7c66a',6+T.tier*4,90+T.tier*40,.4);
       CRIT.splice(i,1); continue;}}
     // hurts small snakes that touch it
     if(vic&&c.cd<=0&&!c.fly&&vd<T.L*.45*c.sc+4&&!vic.remote) hurtSnake(vic,c,T);
-    const scared=th&&T.flee>0&&td<T.flee+th.r*1.4, threatened=th&&td<200+th.r*1.5;
+    const alertR=T.flee*(th&&th.boosting?1.5:1)+(th?th.r*1.8:0), scared=th&&T.flee>0&&td<alertR, threatened=th&&td<260+th.r*1.8;
     if(T.curl){ c.curl=Math.max(0,Math.min(1,c.curl+(threatened?dt*4:-dt*.8))); }
     if(T.fly&&c.fly>0){ // flying away: can't be caught
       c.fly-=dt; c.h=Math.min(90,c.h+dt*160); c.x+=Math.cos(c.a)*380*dt; c.y+=Math.sin(c.a)*380*dt; if(c.fly<=0){c.fly=0;}
     } else if(T.fly&&c.h>0){ c.h=Math.max(0,c.h-dt*120); c.x+=Math.cos(c.a)*160*dt; c.y+=Math.sin(c.a)*160*dt; }
     else if(T.fly&&scared){ c.fly=rnd(1.4,2.4); c.a=Math.atan2(c.y-th.y,c.x-th.x)+rnd(-.5,.5); if(inView(c.x,c.y)) tone(rnd(1400,1900),.06,'sine',.02); if(world==='water') ripple(c.x,c.y,22,.8); }
     else if(T.hop){
-      if(c.h>0||c.hv>0){c.x+=c.vx*dt;c.y+=c.vy*dt;c.h+=c.hv*dt;c.hv-=950*dt; if(c.h<=0){c.h=0;c.hv=0;c.vx=c.vy=0;c.st=scared?rnd(.1,.3):rnd(1.5,4.5); if(world==='water') ripple(c.x,c.y,14,.5);}}
-      else{c.st-=dt; if(scared&&c.st>.35) c.st=rnd(.05,.3);
+      if(c.h>0||c.hv>0){c.x+=c.vx*dt;c.y+=c.vy*dt;c.h+=c.hv*dt;c.hv-=950*dt; if(c.h<=0){c.h=0;c.hv=0;c.vx=c.vy=0;c.st=scared?rnd(.04,.16):rnd(1.5,4.5); if(world==='water') ripple(c.x,c.y,14,.5);}}
+      else{c.st-=dt; if(scared&&c.st>.2) c.st=rnd(.02,.14);
         if(c.st<=0){const away=scared?Math.atan2(c.y-th.y,c.x-th.x)+rnd(-.7,.7):Math.random()*TAU, sp=scared?(T.hopSp||(c.t==='frog'?230:270)):rnd(60,110);
-          c.a=away; c.vx=Math.cos(away)*sp; c.vy=Math.sin(away)*sp; c.hv=scared?300:170; c.h=.01; if(world==='water') ripple(c.x,c.y,16,.6);}}
+          c.a=away; c.vx=Math.cos(away)*sp; c.vy=Math.sin(away)*sp; c.hv=scared?340:170; c.h=.01; if(world==='water') ripple(c.x,c.y,16,.6);}}
     } else {
       const charging=T.charge&&vic&&vd<320&&!scared;
       if(charging){ const ta=Math.atan2(vic.y-c.y,vic.x-c.x); c.a+=angDiff(ta,c.a)*Math.min(1,dt*5); c.run=T.run*.9; }
-      else if(scared){const away=Math.atan2(c.y-th.y,c.x-th.x)+Math.sin(clock*8+c.ph)*(T.tier===3?.25:.55); c.a+=angDiff(away,c.a)*Math.min(1,dt*(T.tier===3?4:9)); c.run=T.run*c.stam; c.stam=Math.max(.5,c.stam-dt*.2);}
+      else if(scared){const away=Math.atan2(c.y-th.y,c.x-th.x)+Math.sin(clock*9+c.ph)*(T.tier===3?.35:.75); c.a+=angDiff(away,c.a)*Math.min(1,dt*(T.tier===3?5:12)); c.run=T.run*c.stam; c.stam=Math.max(.6,c.stam-dt*.14);}
       else{c.stam=Math.min(1,c.stam+dt*.15); c.st-=dt; if(c.st<=0){c.st=rnd(.8,3); c.run=Math.random()<.45?0:rnd(.1,.25)*(T.run||100); c.a+=rnd(-1.4,1.4);}}
       if(T.curl&&c.curl>.5) c.run=0;
       const mv=T.side?c.a+Math.PI/2*(Math.sin(c.ph)>0?1:-1):c.a;
@@ -1336,10 +1338,10 @@ function dayNight(){
   NIGHT=n; DUSK=n*(1-n)*4;
 }
 function drawOrbLight(){
-  const z=cam.z, base=.05+.26*NIGHT; if(base<.01) return;
+  const z=cam.z, base=.31*NIGHT; if(NIGHT<.15) return;
   ctx.globalCompositeOperation='lighter'; let n=0;
   for(const p of pellets){ if(p.x<vx0||p.x>vx1||p.y<vy0||p.y>vy1) continue; const s=p.r*(13+9*NIGHT); if(s*z<14) continue;
-    ctx.globalAlpha=base*(p.v>=2?1:.65)*((!p.nat&&p.life<3)?p.life/3:1); ctx.drawImage(glow(p.col),p.x-s/2,p.y-s/2,s,s); if(++n>260) break; }
+    ctx.globalAlpha=base*(p.v>=2?1:.65)*((!p.nat&&p.life<3)?p.life/3:1); ctx.drawImage(glow(p.col),p.x-s/2,p.y-s/2,s,s); if(++n>140) break; }
   for(const u of pus){ if(u.x<vx0-200||u.x>vx1+200||u.y<vy0-200||u.y>vy1+200) continue; const s=300; ctx.globalAlpha=base*1.3; ctx.drawImage(glow(PU_COL[u.type]),u.x-s/2,u.y-s/2,s,s); }
   ctx.globalAlpha=1; ctx.globalCompositeOperation='source-over';
 }
@@ -2207,9 +2209,12 @@ function render(){
   {const byCol=new Map();
    if(state==='replay'&&rp){ const PL=rpFrame().PL; for(let q=0;q<PL.length;q+=4){ const x=PL[q],y=PL[q+1]; if(x<vx0||x>vx1||y<vy0||y>vy1) continue; let L=byCol.get(PL[q+3]); if(!L){L=[];byCol.set(PL[q+3],L);} L.push({x,y,r:PL[q+2],ph:q,nat:true,life:9}); } }
    else for(const p of pellets){ if(p.x<vx0||p.x>vx1||p.y<vy0||p.y>vy1) continue; let L=byCol.get(p.col); if(!L){L=[];byCol.set(p.col,L);} L.push(p); }
-   const nb=1+.45*NIGHT;
-   for(const [col,L] of byCol){ const img=glow(col);
-     for(const p of L){ const s=p.r*6*(1+.16*Math.sin(clock*3+p.ph))*nb, a=(!p.nat&&p.life<3)?p.life/3:1; if(ctx.globalAlpha!==a) ctx.globalAlpha=a; ctx.drawImage(img,p.x-s/2,p.y-s/2,s,s); } }}
+   const nb=1+.45*NIGHT, tiny=7/cam.z;
+   for(const [col,L] of byCol){ const img=glow(col); let path=null;
+     for(const p of L){ const s=p.r*6*(1+.16*Math.sin(clock*3+p.ph))*nb;
+       if(s<tiny){ if(!path){path=true; ctx.beginPath();} const h=s*.22; ctx.rect(p.x-h,p.y-h,h*2,h*2); continue; }
+       const a=(!p.nat&&p.life<3)?p.life/3:1; if(ctx.globalAlpha!==a) ctx.globalAlpha=a; ctx.drawImage(img,p.x-s/2,p.y-s/2,s,s); }
+     if(path){ ctx.globalAlpha=1; ctx.fillStyle=col; ctx.fill(); } }}
   ctx.globalAlpha=1;
   for(const u of pus){ if(u.x<vx0-60||u.x>vx1+60||u.y<vy0-60||u.y>vy1+60) continue; const s=90*(1+.12*Math.sin(clock*4+u.ph)); ctx.drawImage(glow(PU_COL[u.type]),u.x-s/2,u.y-s/2,s,s); }
   ctx.globalCompositeOperation='source-over';
@@ -2249,7 +2254,7 @@ function render(){
     // orbs light up the snakes and animals next to them (only where something is drawn on this layer)
     ctx.setTransform(K,0,0,K,OX,OY); let ln=0;
     for(const p of pellets){ if(p.x<vx0||p.x>vx1||p.y<vy0||p.y>vy1) continue; const sz=p.r*18; if(sz*cam.z<16) continue;
-      ctx.globalAlpha=.42*NIGHT*(p.v>=2?1:.7)*((!p.nat&&p.life<3)?p.life/3:1); ctx.drawImage(glow(p.col),p.x-sz/2,p.y-sz/2,sz,sz); if(++ln>220) break; }
+      if(ln>120) break; ctx.globalAlpha=.42*NIGHT*(p.v>=2?1:.7)*((!p.nat&&p.life<3)?p.life/3:1); ctx.drawImage(glow(p.col),p.x-sz/2,p.y-sz/2,sz,sz); if(++ln>220) break; }
     for(const u of pus){ if(u.x<vx0-200||u.x>vx1+200||u.y<vy0-200||u.y>vy1+200) continue; ctx.globalAlpha=.5*NIGHT; ctx.drawImage(glow(PU_COL[u.type]),u.x-170,u.y-170,340,340); }
     ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0); ctx.globalCompositeOperation='source-over';
     ctx=mainCtx; ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(ovc,0,0); ctx.setTransform(K,0,0,K,OX,OY); }
