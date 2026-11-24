@@ -893,7 +893,8 @@ function collide(s){
   const gx0=Math.max(0,((Math.min(ax,hx)-range+OFF)/BC)|0),gx1=Math.min(BG-1,((Math.max(ax,hx)+range+OFF)/BC)|0),gy0=Math.max(0,((Math.min(ay,hy)-range+OFF)/BC)|0),gy1=Math.min(BG-1,((Math.max(ay,hy)+range+OFF)/BC)|0);
   for(let gy=gy0;gy<=gy1;gy++)for(let gx=gx0;gx<=gx1;gx++)for(let j=bHead[gy*BG+gx];j!==-1;j=bNext[j]){
     const o=bO[j]; if(o===s.slot) continue;
-    const os=snakes[o], lim=rr+os.r*.82;
+    const os=snakes[o]; if(os.pu.ghost>0) continue;   // phasing snakes are intangible both ways
+    const lim=rr+os.r*.82;
     let t=sl>0?((bX[j]-ax)*sx+(bY[j]-ay)*sy)/sl:1; t=t<0?0:t>1?1:t;
     const dx=bX[j]-(ax+sx*t), dy=bY[j]-(ay+sy*t);
     if(dx*dx+dy*dy<lim*lim){
