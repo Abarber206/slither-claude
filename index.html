@@ -208,7 +208,7 @@ const store={get(k,d){try{const v=localStorage.getItem(k);return v===null?d:v}ca
 
 /* ---------- constants ---------- */
 const R=9000, OFF=R+400, PC=128, PG=Math.ceil(2*OFF/PC), BC=72, BG=Math.ceil(2*OFF/BC);
-const PMAX=24000, BMAX=60000, MAXSEG=1100, NAT=14000, NBOTS=40, NPU=30;
+const PMAX=30000, BMAX=150000, MAXSEG=1100, NAT=14000, NBOTS=140, NPU=40;
 const SPEED=190, BOOSTSPD=400, MINMASS=12;
 const PAL=['#D97757','#E8A55A','#F3EBDD','#9DB17C','#8AB4D8','#B79CD9','#E07A8F','#E6C86E'];
 const SKINS=[
@@ -344,7 +344,7 @@ function grassSources(){
   const z=cam.z,mx=W/2/z+80,my=H/2/z+80;
   for(const s of snakes){ if(s.dead) continue;
     const r=(s.rs||s.r), rad=r*(s.boosting?2.05:1.75), segPx=s.spacing*z/WC, rc=rad*z/WC, stride=Math.max(1,Math.round(rc*(cam.z<.35?.9:.5)/Math.max(.05,segPx))), n=s.n;
-    const tailLen=Math.max(6,Math.floor(n*.3));
+    const tailLen=Math.max(6,Math.floor(n*.3)), reach=n*s.spacing+r*3; if(Math.abs(s.x-cam.x)>mx+reach||Math.abs(s.y-cam.y)>my+reach) continue;
     undulate(s);
     for(let i=0;i<n;i+=stride){const x=WX[i],y=WY[i]; if(Math.abs(x-cam.x)>mx||Math.abs(y-cam.y)>my) continue;
       const j=i>0?i-1:0,k=i<n-1?i+1:i; let hx=WX[j]-WX[k],hy=WY[j]-WY[k]; const hl=Math.hypot(hx,hy)||1;
@@ -577,7 +577,8 @@ function waterRender(){
       const g=v>2?2:v, sp=l>0?(l>1.2?1.2:l):l*.25, wv=q>0?(q>1.3?1.3:q):(q<-1?-.12:q*.12);
       const k=g*.16+sp*.45+wv*.5, w=q>.9?(q-.9)*30:0;
       const sh=shallowAt(cam.x+(((x-1-wShX)*WC+WC/2)-W/2)*iz,wy);
-      d[p]=5+tr*k+w; d[p+1]=6+tg*k+w; d[p+2]=9+tb*k+w; d[p+3]=255-sh*150;
+      const wx=cam.x+(((x-1-wShX)*WC+WC/2)-W/2)*iz, dp=.5+.25*Math.sin(wx*.0011+wy*.0007)+.25*Math.sin(wx*-.0006+wy*.0013+2);
+      d[p]=6+tr*k+w+4*dp; d[p+1]=22+tg*k+w+12*dp; d[p+2]=30+tb*k+w+12*dp; d[p+3]=222-sh*140;
     }}
   wctx.putImageData(wimg,0,0);
 }
@@ -1002,6 +1003,47 @@ const sandPat=(()=>{const S=256,c=mkc(S),g=c.getContext('2d');g.fillStyle='#a88a
   for(let k=0;k<700;k++){const x=Math.random()*S,y=Math.random()*S;g.fillStyle=Math.random()<.5?'rgba(70,52,30,.45)':'rgba(240,225,190,.5)';wrap(()=>g.fillRect(x,y,1.2,1.2));}
   for(let k=0;k<40;k++){const x=Math.random()*S,y=Math.random()*S,r=rnd(1.5,3.5);wrap(()=>{g.fillStyle='rgba(0,0,0,.25)';g.beginPath();g.ellipse(x+.8,y+1,r,r*.8,0,0,TAU);g.fill();g.fillStyle=pick(['#8f8676','#b0a58f','#6f6a60','#c9b99a']);g.beginPath();g.ellipse(x,y,r,r*.8,0,0,TAU);g.fill();});}
   return ctx.createPattern(c,'repeat');})();
+// the bottom: dark silt with pebbles and weeds, visible faintly through the water
+const mudPat=(()=>{const S=256,c=mkc(S),g=c.getContext('2d');g.fillStyle='#1a2620';g.fillRect(0,0,S,S);
+  const wrap=fn=>{for(const ox of [-S,0,S])for(const oy of [-S,0,S]){g.save();g.translate(ox,oy);fn();g.restore();}};
+  for(let k=0;k<70;k++){const x=Math.random()*S,y=Math.random()*S,r=rnd(14,42),lt=Math.random()<.5;wrap(()=>{const gr=g.createRadialGradient(x,y,0,x,y,r);gr.addColorStop(0,lt?'rgba(70,90,60,.3)':'rgba(5,12,8,.35)');gr.addColorStop(1,'rgba(0,0,0,0)');g.fillStyle=gr;g.fillRect(x-r,y-r,r*2,r*2);});}
+  for(let k=0;k<45;k++){const x=Math.random()*S,y=Math.random()*S,r=rnd(1.5,4.5);wrap(()=>{g.fillStyle='rgba(0,0,0,.35)';g.beginPath();g.ellipse(x+1,y+1.2,r,r*.8,0,0,TAU);g.fill();g.fillStyle=pick(['#4a5248','#5c6356','#3d443b','#6b7060']);g.beginPath();g.ellipse(x,y,r,r*.8,0,0,TAU);g.fill();});}
+  g.lineCap='round';
+  for(let k=0;k<22;k++){const x=Math.random()*S,y=Math.random()*S,n=3+(Math.random()*4|0);wrap(()=>{for(let q=0;q<n;q++){const a=Math.random()*TAU,l=rnd(8,18);g.strokeStyle=pick(['#2e4a26','#38582c','#264020']);g.lineWidth=rnd(1.2,2.2);g.beginPath();g.moveTo(x,y);g.quadraticCurveTo(x+Math.cos(a+.5)*l*.6,y+Math.sin(a+.5)*l*.6,x+Math.cos(a)*l,y+Math.sin(a)*l);g.stroke();}});}
+  return ctx.createPattern(c,'repeat');})();
+// caustics: the net of light that ripples across a lit shallow bottom
+const causticPat=(()=>{const S=256,c=mkc(S),g=c.getContext('2d'),im=g.createImageData(S,S),d=im.data,P=[];
+  for(let k=0;k<46;k++)P.push([Math.random()*S,Math.random()*S]);
+  for(let y=0;y<S;y++)for(let x=0;x<S;x++){let f1=1e9,f2=1e9;for(const [px,py] of P){let dx=Math.abs(x-px),dy=Math.abs(y-py);if(dx>S/2)dx=S-dx;if(dy>S/2)dy=S-dy;const dd=Math.sqrt(dx*dx+dy*dy);if(dd<f1){f2=f1;f1=dd;}else if(dd<f2)f2=dd;}
+    const w0=Math.max(0,1-(f2-f1)/3.2), a=w0*w0*(3-2*w0)*(.55+.45*Math.sin(x*.21+y*.17)), p=(y*S+x)*4; d[p]=200;d[p+1]=235;d[p+2]=255;d[p+3]=a*200;}
+  g.putImageData(im,0,0); return ctx.createPattern(c,'repeat');})();
+function drawWaterBed(){
+  ctx.fillStyle=mudPat; ctx.fillRect(vx0,vy0,vx1-vx0,vy1-vy0);
+  drawSand();
+  // two caustic layers drifting different ways, so the light net shimmers
+  if(causticPat.setTransform){ const t=clock; ctx.globalCompositeOperation='lighter';
+    for(const [sc,ox,oy,al] of [[.9,t*14,t*8,.05],[1.25,-t*10,t*13,.04]]){ causticPat.setTransform(new DOMMatrix([sc,0,0,sc,ox,oy])); ctx.globalAlpha=al*(1-.7*NIGHT); ctx.fillStyle=causticPat; ctx.fillRect(vx0,vy0,vx1-vx0,vy1-vy0);
+      // much stronger on the sunlit sandy shallows
+      ctx.globalAlpha=al*3.2*(1-.7*NIGHT); for(const p of SHP){ if(p.x+p.r*1.3<vx0||p.x-p.r*1.3>vx1||p.y+p.r*1.3<vy0||p.y-p.r*1.3>vy1) continue; ctx.beginPath(); for(let q=0;q<=40;q++){const an=q/40*TAU, rr=tgRad(p,an); q?ctx.lineTo(p.x+Math.cos(an)*rr,p.y+Math.sin(an)*rr):ctx.moveTo(p.x+Math.cos(an)*rr,p.y+Math.sin(an)*rr);} ctx.fill(); } }
+    causticPat.setTransform(new DOMMatrix()); ctx.globalAlpha=1; ctx.globalCompositeOperation='source-over'; }
+}
+// sun glints twinkling on the surface, and reeds mirrored in the water
+function drawGlints(){
+  const z=cam.z; if(z<.28||NIGHT>.85) return; const GC=70, i0=Math.floor(vx0/GC),i1=Math.ceil(vx1/GC),j0=Math.floor(vy0/GC),j1=Math.ceil(vy1/GC), t=clock, day=1-NIGHT;
+  ctx.globalCompositeOperation='lighter'; const img=glow('#F3EBDD');
+  for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++){ const h=GH(i,j,21); if(h>.55) continue; const ph=GH(i,j,22)*TAU, b=Math.pow(Math.max(0,Math.sin(t*(1.6+h*2)+ph)),18)*day; if(b<.06) continue;
+    const x=(i+GH(i,j,23))*GC, y=(j+GH(i,j,24))*GC, sz=(7+h*10)*(.6+b*.6); ctx.globalAlpha=b*.9; ctx.drawImage(img,x-sz/2,y-sz/2,sz,sz); }
+  ctx.globalAlpha=1; ctx.globalCompositeOperation='source-over';
+}
+function drawReedReflections(){
+  const PERS=.75/Math.hypot(W,H)*cam.z, t=clock; ctx.lineCap='round'; ctx.strokeStyle='rgba(18,40,24,.32)'; ctx.lineWidth=2.4; ctx.beginPath(); let any=false;
+  for(const q of REEDS){ if(q.x<vx0-120||q.x>vx1+120||q.y<vy0-120||q.y>vy1+120) continue; const r=rng32(q.s);
+    for(let k=0;k<q.n;k++){const bx=q.x+(r()-.5)*20, by=q.y+(r()-.5)*20, h=q.h*(.6+r()*.5); r(); const la=r()*TAU, lm=h*(.18+r()*.14);
+      const lx=(bx-cam.x)*PERS*h+Math.cos(la)*lm, ly=(by-cam.y)*PERS*h+Math.sin(la)*lm, wob=Math.sin(t*2.2+bx*.05+k)*2.2;
+      // mirrored back across the waterline, a little wobbly
+      ctx.moveTo(bx,by); ctx.quadraticCurveTo(bx-lx*.3+wob,by-ly*.3-wob,bx-lx*.6+wob*1.6,by-ly*.6); any=true;}}
+  if(any) ctx.stroke();
+}
 function drawSand(){
   ctx.fillStyle=sandPat;
   for(const p of SHP){ if(p.x+p.r*1.3<vx0||p.x-p.r*1.3>vx1||p.y+p.r*1.3<vy0||p.y-p.r*1.3>vy1) continue;
@@ -1103,13 +1145,13 @@ function drawScrapes(){
 const CRIT=[];
 // prey that matches your size. minR: how big a snake must be to eat it. hurt: what it does to snakes smaller than hurtR.
 const CR={
- cricket:{tier:1,v:18,L:13,flee:170,hop:1,minR:0}, mouse:{tier:1,v:45,L:24,flee:230,run:330,minR:0},
- frog:{tier:1,v:28,L:17,flee:180,hop:1,minR:0}, fish:{tier:1,v:40,L:22,flee:210,run:350,minR:0},
- rabbit:{tier:2,v:150,L:40,flee:340,hop:1,hopSp:380,minR:13,name:'rabbit'}, bird:{tier:2,v:110,L:30,flee:300,run:110,fly:1,minR:12,name:'bird'},
- hedgehog:{tier:2,v:170,L:32,flee:0,run:28,curl:1,minR:17,hurt:'prick',hurtR:17,name:'hedgehog'},
- duck:{tier:2,v:140,L:36,flee:300,run:140,fly:1,minR:13,name:'duck'}, crab:{tier:2,v:160,L:30,flee:0,run:80,side:1,curl:1,minR:17,hurt:'pinch',hurtR:17,name:'crab'},
- boar:{tier:3,v:900,L:85,flee:360,run:320,minR:30,hurt:'bite',hurtR:27,charge:1,name:'wild boar'}, deer:{tier:3,v:1100,L:115,flee:600,run:420,bound:1,minR:34,name:'deer'},
- turtle:{tier:3,v:850,L:80,flee:0,run:32,curl:1,minR:32,name:'turtle'}, pike:{tier:3,v:800,L:95,flee:340,run:360,minR:30,hurt:'bite',hurtR:27,charge:1,name:'pike'},
+ cricket:{tier:1,v:18,ds:0.769,L:10,flee:170,hop:1,minR:0}, mouse:{tier:1,v:45,ds:1.083,L:26,flee:230,run:330,minR:0},
+ frog:{tier:1,v:28,ds:1.765,L:30,flee:180,hop:1,minR:0}, fish:{tier:1,v:40,ds:1.273,L:28,flee:210,run:350,minR:0},
+ rabbit:{tier:2,v:150,ds:1.750,L:70,flee:340,hop:1,hopSp:380,minR:18,name:'rabbit'}, bird:{tier:2,v:110,ds:1.133,L:34,flee:300,run:110,fly:1,minR:15,name:'bird'},
+ hedgehog:{tier:2,v:170,ds:1.375,L:44,flee:0,run:28,curl:1,minR:20,hurt:'prick',hurtR:20,name:'hedgehog'},
+ duck:{tier:2,v:140,ds:1.667,L:60,flee:300,run:140,fly:1,minR:18,name:'duck'}, crab:{tier:2,v:160,ds:1.133,L:34,flee:0,run:80,side:1,curl:1,minR:18,hurt:'pinch',hurtR:18,name:'crab'},
+ boar:{tier:3,v:900,ds:2.000,L:170,flee:360,run:320,minR:40,hurt:'bite',hurtR:34,charge:1,name:'wild boar'}, deer:{tier:3,v:1100,ds:2.174,L:250,flee:600,run:420,bound:1,minR:46,name:'deer'},
+ turtle:{tier:3,v:850,ds:1.500,L:120,flee:0,run:32,curl:1,minR:40,name:'turtle'}, pike:{tier:3,v:800,ds:1.579,L:150,flee:340,run:360,minR:38,hurt:'bite',hurtR:32,charge:1,name:'pike'},
 };
 const CTIERS={meadow:[['cricket','cricket','mouse'],['rabbit','bird','hedgehog'],['boar','deer','deer']],water:[['frog','fish'],['duck','duck','crab'],['turtle','pike']]};
 function spawnCritter(t,x,y){
@@ -1120,7 +1162,7 @@ function spawnCritter(t,x,y){
 let critWorld='', critT=0, critCause=null;
 // what lives around you depends on how big you are; nothing bothers the true giants
 function critMix(r){
-  const w1=1-smooth(12,24,r), w2=(.35*smooth(6,9,r)+.65*smooth(9,15,r))*(1-smooth(32,50,r)), w3=(.3*smooth(13,18,r)+.7*smooth(22,34,r))*(1-smooth(60,85,r));
+  const w1=1-smooth(14,28,r), w2=(.35*smooth(6,10,r)+.65*smooth(12,20,r))*(1-smooth(40,60,r)), w3=(.3*smooth(16,24,r)+.7*smooth(32,46,r))*(1-smooth(80,104,r));
   return [Math.round(15*w1),Math.round(8*w2),Math.round(5*w3)];
 }
 function manageCritters(dt){
@@ -1282,10 +1324,10 @@ function drawCritters(list){
   for(const c of (list||CRIT)){ const T=CR[c.t], L=T.L*c.sc; if(c.x<vx0-40||c.x>vx1+40||c.y<vy0-40||c.y>vy1+40) continue;
     const lift=c.h, sc=1+lift/(c.fly||lift>30?180:260), px=c.x-lift*.25, py=c.y-lift*.45, spx=L*cam.z;
     if(c.t!=='fish'&&c.t!=='pike'){const air=Math.min(1,lift/40);
-      ctx.fillStyle=`rgba(4,8,2,${.34-air*.2})`; ctx.beginPath(); ctx.ellipse(c.x+L*.2+lift*.25,c.y+L*.28+lift*.35,L*.52/sc,L*.3/sc,c.a,0,TAU); ctx.fill();
-      if(air<.5){ctx.fillStyle=`rgba(0,0,0,${.3*(1-air*2)})`; ctx.beginPath(); ctx.ellipse(c.x,c.y,L*.42,L*.24,c.a,0,TAU); ctx.fill();}}
+      ctx.fillStyle=`rgba(4,8,2,${.34-air*.2})`; ctx.beginPath(); ctx.ellipse(c.x+L*.14+lift*.25,c.y+L*.2+lift*.35,L*.38/sc,L*.2/sc,c.a,0,TAU); ctx.fill();
+      if(air<.5){ctx.fillStyle=`rgba(0,0,0,${.3*(1-air*2)})`; ctx.beginPath(); ctx.ellipse(c.x,c.y,L*.32,L*.17,c.a,0,TAU); ctx.fill();}}
     if(spx<4){ctx.fillStyle=({mouse:'#8a7a6a',fish:c.col,rabbit:'#9a8570',bird:'#7a5f45',hedgehog:'#5a4632',boar:'#4a3528',deer:'#a7774a',duck:'#6b5a40',crab:'#c8502a',turtle:'#5d6b3a',pike:'#6f7d45'})[c.t]||'#5d7a2e'; ctx.beginPath(); ctx.arc(px,py,L*.35,0,TAU); ctx.fill(); continue;}
-    ctx.save(); ctx.translate(px,py); ctx.rotate(c.a); ctx.scale(sc*c.sc,sc*c.sc); ctx.lineCap='round';
+    ctx.save(); ctx.translate(px,py); ctx.rotate(c.a); ctx.scale(sc*c.sc*(T.ds||1),sc*c.sc*(T.ds||1)); ctx.lineCap='round';
     const t=clock+c.ph;
     if(c.t==='cricket'){
       const air=c.h>0, leg=air?1:0;
@@ -1309,14 +1351,29 @@ function drawCritters(list){
       ctx.fillStyle='#e48f98'; ctx.beginPath(); ctx.arc(12.6,0,1,0,TAU); ctx.fill();
       ctx.strokeStyle='rgba(240,230,220,.5)'; ctx.lineWidth=.3; for(const sd of [-1,1]){ctx.beginPath(); ctx.moveTo(11.5,sd*.6); ctx.lineTo(15,sd*3); ctx.moveTo(11.5,sd*.8); ctx.lineTo(15.5,sd*1); ctx.stroke();}
     } else if(c.t==='frog'){
-      const air=c.h>0;
-      ctx.fillStyle='#3f6a2a';
-      for(const sd of [-1,1]){ if(air){ctx.beginPath(); ctx.ellipse(-8,sd*3,5.5,1.6,sd*.25,0,TAU); ctx.fill();}
-        else{ctx.beginPath(); ctx.ellipse(-3,sd*5.2,4.2,2.2,sd*.6,0,TAU); ctx.fill(); ctx.beginPath(); ctx.ellipse(3.5,sd*4.6,2.2,1.4,-sd*.5,0,TAU); ctx.fill();}}
-      const g=ctx.createRadialGradient(0,-1.5,1,0,0,8); g.addColorStop(0,'#86b552'); g.addColorStop(1,'#4f7f32');
-      ctx.fillStyle=g; ctx.beginPath(); ctx.ellipse(0,0,7,5.6,0,0,TAU); ctx.fill();
-      ctx.fillStyle='rgba(40,70,25,.7)'; for(const [sx,sy,sr] of [[-3,-1.6,1.2],[-1,2.2,1],[-4,2,.8],[1.5,-.5,.7]]){ctx.beginPath(); ctx.arc(sx,sy,sr,0,TAU); ctx.fill();}
-      for(const sd of [-1,1]){ctx.fillStyle='#78a849'; ctx.beginPath(); ctx.arc(4.2,sd*3,2.1,0,TAU); ctx.fill(); ctx.fillStyle='#f3e7a8'; ctx.beginPath(); ctx.arc(4.5,sd*3.1,1.35,0,TAU); ctx.fill(); ctx.fillStyle='#111'; ctx.beginPath(); ctx.ellipse(4.6,sd*3.1,.5,.95,0,0,TAU); ctx.fill();}
+      const air=c.h>0, ext=air?1:0, sk='#4f7a33', dk='#2f4f1f';
+      // hind legs: folded Z alongside the body, stretched back mid-hop; long webbed feet
+      for(const sd of [-1,1]){ ctx.strokeStyle=sk; ctx.lineWidth=2.6; ctx.lineJoin='round'; ctx.beginPath();
+        if(air){ctx.moveTo(-3,sd*3); ctx.lineTo(-10,sd*4.5); ctx.lineTo(-17,sd*3.5);}
+        else{ctx.moveTo(-3,sd*3.5); ctx.lineTo(-1,sd*8.5); ctx.lineTo(-8,sd*6.5);} ctx.stroke();
+        const fx=air?-17:-8, fy=sd*(air?3.5:6.5); ctx.fillStyle='#3f6528'; ctx.beginPath(); ctx.moveTo(fx,fy);
+        for(let t=0;t<4;t++){const a=Math.PI+sd*(-.45+t*.3)*(air?.7:1); ctx.lineTo(fx+Math.cos(a)*4.2,fy+Math.sin(a)*4.2*sd*sd);} ctx.closePath(); ctx.fill();
+        // front legs
+        ctx.lineWidth=1.6; ctx.beginPath(); ctx.moveTo(4,sd*3.5); ctx.lineTo(6.5,sd*6.5); ctx.lineTo(8.5,sd*6.8); ctx.stroke(); }
+      // body: pear shape, wide head
+      const g=ctx.createRadialGradient(1,-1.5,1,0,0,10); g.addColorStop(0,'#8fbd5a'); g.addColorStop(.6,'#5f8f3c'); g.addColorStop(1,'#3b6226');
+      ctx.fillStyle=g; ctx.beginPath(); ctx.moveTo(-7,0); ctx.bezierCurveTo(-7,-5,-1,-6.4,4,-5.6); ctx.bezierCurveTo(8,-5,10.5,-2.6,10.8,0); ctx.bezierCurveTo(10.5,2.6,8,5,4,5.6); ctx.bezierCurveTo(-1,6.4,-7,5,-7,0); ctx.fill();
+      ctx.strokeStyle='rgba(20,40,10,.5)'; ctx.lineWidth=.6; ctx.stroke();
+      // irregular dark blotches and two pale ridges down the back
+      ctx.fillStyle='rgba(30,50,15,.75)'; for(const [sx,sy,rx,ry] of [[-4,-2,1.6,1.1],[-1.5,2.4,1.3,1],[-4.8,2.3,1,.8],[1.2,-.8,1,.8],[-2.3,-.1,.8,.6],[3,2.6,.8,.6]]){ctx.beginPath(); ctx.ellipse(sx,sy,rx,ry,.4,0,TAU); ctx.fill();}
+      ctx.strokeStyle='rgba(215,225,160,.55)'; ctx.lineWidth=.7; for(const sd of [-1,1]){ctx.beginPath(); ctx.moveTo(-6,sd*3.6); ctx.quadraticCurveTo(0,sd*4.4,6,sd*3.4); ctx.stroke();}
+      // pale lip, nostrils, bulging eyes with gold irises and horizontal pupils
+      ctx.strokeStyle='rgba(230,235,190,.6)'; ctx.lineWidth=.6; ctx.beginPath(); ctx.arc(7.6,0,3.2,-1.2,1.2); ctx.stroke();
+      ctx.fillStyle='#1c2a10'; for(const sd of [-1,1]){ctx.beginPath(); ctx.arc(10,sd*1,.35,0,TAU); ctx.fill();}
+      for(const sd of [-1,1]){ ctx.fillStyle='#5f8f3c'; ctx.beginPath(); ctx.arc(6,sd*3.6,2.4,0,TAU); ctx.fill();
+        const eg=ctx.createRadialGradient(6.3,sd*3.3,.2,6,sd*3.6,1.8); eg.addColorStop(0,'#f2d36a'); eg.addColorStop(1,'#8a6a1c'); ctx.fillStyle=eg; ctx.beginPath(); ctx.arc(6.2,sd*3.7,1.75,0,TAU); ctx.fill();
+        ctx.fillStyle='#0b0a06'; ctx.beginPath(); ctx.ellipse(6.2,sd*3.7,1.2,.55,0,0,TAU); ctx.fill();
+        ctx.fillStyle='rgba(255,255,255,.85)'; ctx.beginPath(); ctx.arc(6.8,sd*3.2,.45,0,TAU); ctx.fill(); }
     } else if(c.t==='fish'){
       ctx.globalAlpha=.88; const sw=Math.sin(t*(6+c.run/30))*(.25+c.run/600);
       ctx.fillStyle='rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(1.5,2,9,4,0,0,TAU); ctx.fill();
@@ -1682,9 +1739,9 @@ function setRole(role,hostPeer){
 function worldSend(){
   if(!chan||worldRole!=='host'||othersHere<1) return;
   const now=performance.now(); if(now-lastWorld<120) return; lastWorld=now;
-  const bots=snakes.filter(s=>!s.player&&!s.remote&&!s.dead), b=[], seeds=[];
+  let bots=snakes.filter(s=>!s.player&&!s.remote&&!s.dead); if(transport==='claude'&&bots.length>60) bots=bots.sort((a,b)=>b.mass-a.mass).slice(0,60); const b=[], seeds=[];
   for(const s of bots) b.push([s.uid,s.skin===OPUS_SKIN?-2:SKINS.indexOf(s.skin),Math.round(s.x),Math.round(s.y),Math.round(s.ang*1000)/1000,Math.round(s.mass),(s.boosting?1:0)|(s.pu.ghost>0?2:0)]);
-  for(let q=0;q<3&&bots.length;q++){const t=bots[(seedIdx++)%bots.length],n=t.n,st=Math.max(1,Math.ceil(n/24)),pts=[];
+  for(let q=0,nq=Math.max(3,Math.ceil(bots.length/14));q<nq&&bots.length;q++){const t=bots[(seedIdx++)%bots.length],n=t.n,st=Math.max(1,Math.ceil(n/24)),pts=[];
     for(let i=0;i<n;i+=st)pts.push(Math.round(t.bx[i]),Math.round(t.by[i])); pts.push(Math.round(t.bx[n-1]),Math.round(t.by[n-1])); seeds.push([t.uid,t.name,pts]);}
   while(deadLog.length&&now-deadLog[0].t>1500) deadLog.shift();
   const w={q:++worldSeq,t:Math.round(now),b,s:seeds,d:deadLog.map(e=>[e.id,e.kb])};
@@ -1874,7 +1931,7 @@ function undulate(s){
 function updateCam(dt){
   const base=clamp(Math.sqrt(W*H)/820,.68,1.25);
   let tx=cam.x,ty=cam.y,tz=base,ks=2;
-  if(state==='play'&&player&&!player.dead){tx=player.x;ty=player.y;tz=clamp(Math.hypot(W,H)/2/(150+(player.rs||player.r)*30),.12,3)*(inputMode==='touch'||Math.min(W,H)<600?1.35:1);ks=9;}
+  if(state==='play'&&player&&!player.dead){tx=player.x;ty=player.y;tz=clamp(Math.hypot(W,H)/2/(105+(player.rs||player.r)*21),.12,4)*(inputMode==='touch'||Math.min(W,H)<600?1.15:1);ks=9;}
   else if(state==='dying'||state==='over'){tz=base*.7;}
   else if(leader){tx=leader.x;ty=leader.y;tz=base*clamp(.8-(leader.r-6)*.005,.32,.8);}
   tz*=Math.max(zoomMul,zoomMin());
@@ -1886,6 +1943,7 @@ function waterSources(){
     const rad=Math.min(s.r*.9,5*WC/z),rc=rad*z/WC,segPx=s.spacing*z/WC,stride=Math.max(1,Math.round(rc*.85/Math.max(.05,segPx)));
     const base=(s.boosting?.02:.0085)*Math.min(1.6,stride*segPx/(rc*.6)), n=s.n;
     const frad=Math.min(s.r*1.05,7*WC/z), fstride=Math.max(1,Math.round(frad*z/WC*.7/Math.max(.05,segPx))), fw=Math.min(1.4,fstride*segPx/(frad*z/WC*.7))*(s.boosting?1.3:1);
+    if(Math.abs(s.x-cam.x)>mx+n*s.spacing+60||Math.abs(s.y-cam.y)>my+n*s.spacing+60) continue;
     undulate(s);
     for(let i=0;i<n;i+=stride){const x=WX[i],y=WY[i]; if(Math.abs(x-cam.x)>mx||Math.abs(y-cam.y)>my) continue;
       ripple(x,y,rad,base*(1-.55*i/n));}
@@ -2185,7 +2243,7 @@ function render(){
   const z=cam.z; let sx=0,sy=0; if(shake>0){sx=rnd(-shake,shake);sy=rnd(-shake,shake);}
   ctx.setTransform(DPR,0,0,DPR,0,0); ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality=IS_FF?'low':'medium';
   K=DPR*z; OX=DPR*(W/2-cam.x*z+sx); OY=DPR*(H/2-cam.y*z+sy);
-  if(world==='water'){ ctx.fillStyle='#05060a'; ctx.fillRect(0,0,W,H); vx0=cam.x-W/2/z-30; vx1=cam.x+W/2/z+30; vy0=cam.y-H/2/z-30; vy1=cam.y+H/2/z+30; ctx.setTransform(K,0,0,K,OX,OY); drawSand(); ctx.setTransform(DPR,0,0,DPR,0,0); ctx.drawImage(wcv,0,0,gw,gh,(-1-wShX)*WC+sx,(-1-wShY)*WC+sy,gw*WC,gh*WC); }
+  if(world==='water'){ ctx.fillStyle='#05060a'; ctx.fillRect(0,0,W,H); vx0=cam.x-W/2/z-30; vx1=cam.x+W/2/z+30; vy0=cam.y-H/2/z-30; vy1=cam.y+H/2/z+30; ctx.setTransform(K,0,0,K,OX,OY); drawWaterBed(); ctx.setTransform(DPR,0,0,DPR,0,0); ctx.drawImage(wcv,0,0,gw,gh,(-1-wShX)*WC+sx,(-1-wShY)*WC+sy,gw*WC,gh*WC); ctx.setTransform(K,0,0,K,OX,OY); drawReedReflections(); drawGlints(); }
   ctx.setTransform(K,0,0,K,OX,OY);
   vx0=cam.x-W/2/z-30; vx1=cam.x+W/2/z+30; vy0=cam.y-H/2/z-30; vy1=cam.y+H/2/z+30;
   if(world==='meadow') drawMeadow(); else drawPads();
@@ -2283,7 +2341,7 @@ const lbTitle=document.querySelector('#lb h4'),scoreEl=$('score'),rankEl=$('rank
 function updateHud(){
   const alive=snakes.filter(s=>!s.dead).sort((a,b)=>b.mass-a.mass);
   leader=alive[0]||null;
-  targetBots=Math.max(18,NBOTS-humansPlaying()*4);
+  targetBots=Math.max(18,(transport==='claude'?60:NBOTS)-humansPlaying()*4);
   if(state!=='play'||!player||player.dead) return;
   const LBN=W<520?6:8, humans=alive.filter(isHuman), shared=!!chan&&humans.length>1&&worldRole==='solo';
   const board=shared?humans:alive, rank=board.indexOf(player)+1; if(rank>0) stats.bestRank=Math.min(stats.bestRank,rank);
