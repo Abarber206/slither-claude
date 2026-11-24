@@ -208,7 +208,7 @@ const store={get(k,d){try{const v=localStorage.getItem(k);return v===null?d:v}ca
 
 /* ---------- constants ---------- */
 const R=9000, OFF=R+400, PC=128, PG=Math.ceil(2*OFF/PC), BC=72, BG=Math.ceil(2*OFF/BC);
-const PMAX=30000, BMAX=150000, MAXSEG=1100, NAT=14000, NBOTS=140, NPU=40;
+const PMAX=30000, BMAX=150000, MAXSEG=1100, NAT=14000, NBOTS=100, NPU=40;
 const SPEED=190, BOOSTSPD=400, MINMASS=12;
 const PAL=['#D97757','#E8A55A','#F3EBDD','#9DB17C','#8AB4D8','#B79CD9','#E07A8F','#E6C86E'];
 const SKINS=[
@@ -755,7 +755,9 @@ function newSnake(o){const s=baseSnake(o);placeSnake(s);return s;}
 function placeSnake(s){
   let x=0,y=0,ok=false;
   for(let t=0;t<40&&!ok;t++){
-    const a=Math.random()*TAU,d=Math.sqrt(Math.random())*R*.78; x=Math.cos(a)*d; y=Math.sin(a)*d; ok=true;
+    let a=Math.random()*TAU,d=Math.sqrt(Math.random())*R*.78;
+    if(!s.player){ if(s.homeR===undefined){ s.homeA=Math.random()*TAU; s.homeR=Math.random()<.3?R*rnd(.78,.9):Math.sqrt(Math.random())*R*.75; } a=s.homeA+rnd(-.25,.25); d=clamp(s.homeR+rnd(-400,400),0,R*.9); }
+    x=Math.cos(a)*d; y=Math.sin(a)*d; ok=true;
     for(const o of snakes){ if(o===s||o.dead) continue;
       for(let i=0;i<o.n;i+=3){const dx=o.bx[i]-x,dy=o.by[i]-y; if(dx*dx+dy*dy<450*450){ok=false;break;}}
       if(!ok) break; }
@@ -800,9 +802,10 @@ function addPellet(x,y,v,col,nat,vx,vy){
 }
 function natPellet(){const a=Math.random()*TAU,d=Math.sqrt(Math.random())*R*.97,q=Math.random();addPellet(Math.cos(a)*d,Math.sin(a)*d,q<.6?1:q<.9?2:4,pick(PAL),true);}
 function spawnPU(){const a=Math.random()*TAU,d=Math.sqrt(Math.random())*R*.85;pus.push({x:Math.cos(a)*d,y:Math.sin(a)*d,type:pick(['magnet','turbo','ghost']),ph:Math.random()*TAU,pt:Math.random()*1.4});}
+const pVal=new Float32Array(PG*PG);
 function buildPelletGrid(){
-  pHead.fill(-1);
-  for(let i=0;i<pellets.length;i++){const p=pellets[i];const gx=clamp(((p.x+OFF)/PC)|0,0,PG-1),gy=clamp(((p.y+OFF)/PC)|0,0,PG-1),c=gy*PG+gx;pNext[i]=pHead[c];pHead[c]=i;}
+  pHead.fill(-1); pVal.fill(0);
+  for(let i=0;i<pellets.length;i++){const p=pellets[i];const gx=clamp(((p.x+OFF)/PC)|0,0,PG-1),gy=clamp(((p.y+OFF)/PC)|0,0,PG-1),c=gy*PG+gx;pNext[i]=pHead[c];pHead[c]=i; if(!p.nat&&!p.dead) pVal[c]+=p.v;}
 }
 function buildBodyGrid(){
   bHead.fill(-1); let c=0;
@@ -895,7 +898,26 @@ function ai(s,dt){
     if(o.mass>s.mass*1.3&&d<td){td=d;threat=o;}
     if(o.mass<s.mass*.85&&d<pd){pd=d;prey=o;}
   }
-  if(s.pers==='coward'&&threat&&td<360){goal=Math.atan2(s.y-threat.y,s.x-threat.x);boost=td<230&&s.mass>40;}
+  // --- human-like awareness ---
+  // 1) a head aimed at me: swerve sideways out of its path
+  let dodge=null;
+  for(const o of snakes){ if(o===s||o.dead||o.mass<s.mass*.6) continue; const dx=s.x-o.x,dy=s.y-o.y,d=Math.hypot(dx,dy); if(d>320+o.r*3+s.r) continue;
+    const aim=(Math.cos(o.ang)*dx+Math.sin(o.ang)*dy)/(d||1); if(aim>.86){ const side=(Math.cos(o.ang)*dy-Math.sin(o.ang)*dx)>0?1:-1; dodge=o.ang+side*1.45; boost=d<200+o.r*2&&s.mass>30&&Math.random()<.8; break; } }
+  if(dodge!==null&&s.skill>.45) goal=dodge;
+  // 2) a feast where a snake died: worth racing for (humans pile in)
+  else if(!(s.pers==='coward'&&threat&&td<420)){ const FR=Math.round((900+s.r*4)/PC), cx=((s.x+OFF)/PC)|0, cy=((s.y+OFF)/PC)|0; let bv=0,bx=0,by=0,bd=0;
+    for(let gy=Math.max(0,cy-FR);gy<=Math.min(PG-1,cy+FR);gy+=1)for(let gx=Math.max(0,cx-FR);gx<=Math.min(PG-1,cx+FR);gx+=1){ const v=pVal[gy*PG+gx]; if(v<25) continue;
+      const wx=(gx+.5)*PC-OFF, wy=(gy+.5)*PC-OFF, d=Math.hypot(wx-s.x,wy-s.y), sc=v/(d+260); if(sc>bv){bv=sc;bx=wx;by=wy;bd=d;} }
+    if(bv>.12&&bd>40){ goal=Math.atan2(by-s.y,bx-s.x); boost=bd<700&&bd>150&&s.mass>60&&bv>.3&&Math.random()<.55; } }
+  // 3) big snakes coil around much smaller ones to trap them
+  if(goal===null&&prey&&s.mass>prey.mass*5&&pd<s.r*9+260&&(s.pers==='hunter'||s.uid%3===0)){
+    const a0=Math.atan2(s.y-prey.y,s.x-prey.x), dir=s.uid%2?1:-1, want=s.r*3.2+prey.r*4; goal=a0+dir*Math.PI/2-dir*clamp((pd-want)/want,-.6,.6); boost=false; }
+  // 4) hunters go for snakes their size and are drawn to human players; they try to cut heads off
+  if(goal===null&&s.pers==='hunter'){ let tgt=prey,tdd=pd;
+    for(const o of snakes){ if(!(o.player||(o.remote&&!o.netbot))||o.dead) continue; const d=Math.hypot(o.x-s.x,o.y-s.y); if(d<750&&o.mass<s.mass*1.6&&o.mass>s.mass*.15){tgt=o;tdd=d;break;} }
+    if(tgt&&tdd<750&&s.mass>50){ const lead=tgt.r*6+120+s.r+tdd*.25,tx=tgt.x+Math.cos(tgt.ang)*lead,ty=tgt.y+Math.sin(tgt.ang)*lead; goal=Math.atan2(ty-s.y,tx-s.x); boost=tdd<420&&s.mass>90&&Math.random()<.6; } }
+  if(goal!==null){}
+  else if(s.pers==='coward'&&threat&&td<360){goal=Math.atan2(s.y-threat.y,s.x-threat.x);boost=td<230&&s.mass>40;}
   else if(s.pers==='hunter'&&prey&&pd<600&&s.mass>50){
     const lead=prey.r*5+80+s.r,tx=prey.x+Math.cos(prey.ang)*lead,ty=prey.y+Math.sin(prey.ang)*lead;
     goal=Math.atan2(ty-s.y,tx-s.x); boost=pd<360&&s.mass>90&&Math.random()<.7;
@@ -910,9 +932,12 @@ function ai(s,dt){
     }
     if(best>0){goal=Math.atan2(fy-s.y,fx-s.x);boost=fv>=3&&fd<240&&s.mass>70&&Math.random()<.35;}
   }
-  if(goal===null){s.wander+=(Math.random()-.5)*.9;goal=s.wander;}
+  if(goal===null){s.wander+=(Math.random()-.5)*.9;goal=s.wander+(s.uid%4===0?Math.sin(clock*2.6+s.uid)*.55:0);
+    if(s.homeR!==undefined){ s.homeA+=(s.homeR>R*.7?.012:.004)*(s.uid%2?1:-1); const hx=Math.cos(s.homeA)*s.homeR, hy=Math.sin(s.homeA)*s.homeR, hd=Math.hypot(hx-s.x,hy-s.y);
+      if(hd>350){ goal+=angDiff(Math.atan2(hy-s.y,hx-s.x),goal)*Math.min(.85,(hd-350)/900); } }}
   const dc=Math.hypot(s.x,s.y);
-  if(dc>R*.8){goal+=angDiff(Math.atan2(-s.y,-s.x),goal)*Math.min(1,(dc-R*.8)/(R*.12));}
+  const edgeR=s.homeR!==undefined&&s.homeR>R*.7?R*.9:R*.8;
+  if(dc>edgeR){goal+=angDiff(Math.atan2(-s.y,-s.x),goal)*Math.min(1,(dc-edgeR)/(R*.06));}
   const look=(s.r*2.4+70+(s.boosting?110:0))*(.55+.65*s.skill)*spm(s);
   let best=goal,bestCost=danger(s,goal,look);
   if(bestCost>0){
@@ -922,6 +947,7 @@ function ai(s,dt){
     }
     if(bestCost>=1) boost=s.pers==='coward'&&s.mass>40&&Math.random()<.4; else if(bestCost>.2) boost=false;
   }
+  if(boost&&Math.random()<.18) boost=false;
   s.tAng=best; s.look=best; s.want=boost;
 }
 function kill(s,k){
@@ -1401,6 +1427,24 @@ function drawOrbLight(){
     ctx.globalAlpha=base*(p.v>=2?1:.65)*((!p.nat&&p.life<3)?p.life/3:1); ctx.drawImage(glow(p.col),p.x-s/2,p.y-s/2,s,s); if(++n>140) break; }
   for(const u of pus){ if(u.x<vx0-200||u.x>vx1+200||u.y<vy0-200||u.y>vy1+200) continue; const s=300; ctx.globalAlpha=base*1.3; ctx.drawImage(glow(PU_COL[u.type]),u.x-s/2,u.y-s/2,s,s); }
   ctx.globalAlpha=1; ctx.globalCompositeOperation='source-over';
+}
+const lcv=document.createElement('canvas'), lctx=lcv.getContext('2d');
+function lightPass(){
+  if(state==='replay') return false;
+  if(lcv.width!==ovc.width||lcv.height!==ovc.height){lcv.width=ovc.width;lcv.height=ovc.height;}
+  const g=lctx; g.setTransform(1,0,0,1,0,0); g.globalCompositeOperation='source-over'; g.clearRect(0,0,lcv.width,lcv.height);
+  g.setTransform(K,0,0,K,OX,OY); g.globalCompositeOperation='lighter';
+  const pw=.38+.5*NIGHT; let n=0;
+  for(const p of pellets){ if(p.x<vx0||p.x>vx1||p.y<vy0||p.y>vy1) continue; const sz=p.r*16; if(sz*cam.z<18) continue;
+    const a=pw*(p.v>=2?1:.6)*((!p.nat&&p.life<3)?p.life/3:1);
+    g.globalAlpha=a; g.drawImage(glow(p.col),p.x-sz/2,p.y-sz/2,sz,sz);
+    g.globalAlpha=a*.55; const hs=p.r*5; g.drawImage(glow('#ffffff'),p.x-hs/2,p.y-hs/2,hs,hs);
+    if(++n>160) break; }
+  for(const u of pus){ if(u.x<vx0-200||u.x>vx1+200||u.y<vy0-200||u.y>vy1+200) continue; g.globalAlpha=pw*1.1; g.drawImage(glow(PU_COL[u.type]),u.x-180,u.y-180,360,360); n++; }
+  if(!n) return false;
+  // keep the light only where snakes/animals are
+  g.globalAlpha=1; g.setTransform(1,0,0,1,0,0); g.globalCompositeOperation='destination-in'; g.drawImage(ovc,0,0); g.globalCompositeOperation='source-over';
+  return true;
 }
 function drawNightGround(){ if(NIGHT<.01) return; ctx.fillStyle=`rgba(6,12,32,${.58*NIGHT})`; ctx.fillRect(vx0-60,vy0-60,vx1-vx0+120,vy1-vy0+120); }
 function drawNightSky(dt){
@@ -2255,7 +2299,7 @@ function render(){
   ctx.beginPath();ctx.arc(0,0,R,0,TAU);ctx.lineWidth=30;ctx.strokeStyle=`rgba(217,119,87,${edge})`;ctx.stroke();
   ctx.lineWidth=4;ctx.strokeStyle='rgba(240,150,120,.9)';ctx.stroke();
   // dark spots where snakes died, fading away
-  if(marks.length){ ctx.lineCap='round'; ctx.lineJoin='round';
+  if(marks.length&&state!=='replay'){ ctx.lineCap='round'; ctx.lineJoin='round';
     for(const mk of marks){ const P=mk.pts, f=mk.life/mk.max, a=Math.min(1,f*1.6)*Math.min(1,(mk.max-mk.life)*4);
       let vis=false; for(let i=0;i<P.length;i+=8){if(P[i]>vx0-mk.r*3&&P[i]<vx1+mk.r*3&&P[i+1]>vy0-mk.r*3&&P[i+1]<vy1+mk.r*3){vis=true;break;}} if(!vis) continue;
       const path=()=>{ctx.beginPath();ctx.moveTo(P[0],P[1]);for(let i=2;i<P.length;i+=2)ctx.lineTo(P[i],P[i+1]);};
@@ -2280,7 +2324,7 @@ function render(){
     ctx.save();ctx.translate(u.x,u.y);ctx.rotate(clock*.8+u.ph);ctx.setLineDash([6,5]);ctx.lineWidth=2;ctx.strokeStyle=PU_COL[u.type];ctx.beginPath();ctx.arc(0,0,20,0,TAU);ctx.stroke();ctx.restore();
     drawPUIcon(u,22);
   }
-  const nightOv=NIGHT>.01;
+  const nightOv=NIGHT>.01||!IS_FF;
   if(nightOv){ if(ovc.width!==cvs.width||ovc.height!==cvs.height){ovc.width=cvs.width;ovc.height=cvs.height;} octx.setTransform(K,0,0,K,OX,OY); octx.clearRect(vx0-100,vy0-100,vx1-vx0+200,vy1-vy0+200); octx.setTransform(1,0,0,1,0,0); octx.clearRect(0,0,ovc.width,ovc.height); ctx=octx; ctx.setTransform(K,0,0,K,OX,OY); }
   drawCritters(state==='replay'&&rp?rpFrame().CL:null);
   // snakes: smaller first so giants pass over
@@ -2309,13 +2353,12 @@ function render(){
     if(inTall) drawSnake(player,.22,true); }
   if(world==='water') drawReeds();
   if(nightOv){ ctx.setTransform(1,0,0,1,0,0); ctx.globalCompositeOperation='source-atop'; ctx.fillStyle=`rgba(6,12,32,${.55*NIGHT})`; ctx.fillRect(0,0,ovc.width,ovc.height);
-    // orbs light up the snakes and animals next to them (only where something is drawn on this layer)
-    ctx.setTransform(K,0,0,K,OX,OY); let ln=0;
-    for(const p of pellets){ if(p.x<vx0||p.x>vx1||p.y<vy0||p.y>vy1) continue; const sz=p.r*18; if(sz*cam.z<16) continue;
-      if(ln>120) break; ctx.globalAlpha=.42*NIGHT*(p.v>=2?1:.7)*((!p.nat&&p.life<3)?p.life/3:1); ctx.drawImage(glow(p.col),p.x-sz/2,p.y-sz/2,sz,sz); if(++ln>220) break; }
-    for(const u of pus){ if(u.x<vx0-200||u.x>vx1+200||u.y<vy0-200||u.y>vy1+200) continue; ctx.globalAlpha=.5*NIGHT; ctx.drawImage(glow(PU_COL[u.type]),u.x-170,u.y-170,340,340); }
-    ctx.globalAlpha=1; ctx.setTransform(1,0,0,1,0,0); ctx.globalCompositeOperation='source-over';
-    ctx=mainCtx; ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(ovc,0,0); ctx.setTransform(K,0,0,K,OX,OY); }
+    ctx.globalCompositeOperation='source-over';
+    // orbs light the snakes like real light: additive coloured light plus a glossy hot spot, only on the bodies
+    const lit=lightPass();
+    ctx=mainCtx; ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(ovc,0,0);
+    if(lit){ ctx.globalCompositeOperation='lighter'; ctx.drawImage(lcv,0,0); ctx.globalCompositeOperation='source-over'; }
+    ctx.setTransform(K,0,0,K,OX,OY); }
   drawNightSky(Math.min(.05,rDt));
   // labels
   ctx.setTransform(K,0,0,K,OX,OY);
@@ -2524,7 +2567,8 @@ const RP=[]; let rpAcc=0, rp=null, lastRp=null;
 function rpCapture(dt){
   rpAcc+=dt; if(rpAcc<1/45) return; rpAcc=0;
   const hw=W/2/cam.z*1.3+150, hh=H/2/cam.z*1.3+150, L=[];
-  for(const s of snakes){ if(s.dead||s.n<2) continue;
+  const capList=player&&!player.dead?[player,...snakes.filter(o=>o!==player)]:snakes;
+  for(const s of capList){ if(s.dead||s.n<2) continue;
     const reach=Math.min(4000,s.n*s.spacing); if(Math.abs(s.x-cam.x)>hw+reach||Math.abs(s.y-cam.y)>hh+reach) continue;
     undulate(s); const r=s.rs||s.r, st=Math.max(1,Math.round(r*.42/s.spacing)), m=Math.min(600,Math.ceil(s.n/st)+1), P=new Float32Array(m*2);
     let k=0; for(let i=0;i<s.n&&k<m-1;i+=st){P[k*2]=WX[i];P[k*2+1]=WY[i];k++;} P[k*2]=WX[s.n-1];P[k*2+1]=WY[s.n-1];k++;
@@ -2545,7 +2589,7 @@ function startReplay(rec){
 function endReplay(){ if(state!=='replay') return; rp=null; $('rpBadge').classList.add('hidden'); $('rpVig').classList.add('hidden'); showOver(); }
 addEventListener('pointerdown',()=>{ if(state==='replay') endReplay(); });
 addEventListener('keydown',()=>{ if(state==='replay') endReplay(); });
-const RPB=[]; for(let i=0;i<40;i++) RPB.push({bx:new Float32Array(MAXSEG+2),by:new Float32Array(MAXSEG+2)});
+const RPB=[]; for(let i=0;i<200;i++) RPB.push({bx:new Float32Array(MAXSEG+2),by:new Float32Array(MAXSEG+2)});
 function replaySnakes(){
   const F=rp.F, t=rp.t; let i=0; while(i<F.length-2&&F[i+1].t<=t) i++;
   const A=F[i], B=F[Math.min(F.length-1,i+1)], f=B.t>A.t?clamp((t-A.t)/(B.t-A.t),0,1):0;
